@@ -1,0 +1,14 @@
+{
+  "name": "bini",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build:types": "pnpm --filter @bini/types build",
+    "dev:api": "pnpm --filter api start:dev",
+    "dev:web": "pnpm --filter web dev"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "engines": { "node": ">=20" }
+}
