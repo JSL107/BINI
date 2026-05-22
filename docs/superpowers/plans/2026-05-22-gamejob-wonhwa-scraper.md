@@ -262,7 +262,7 @@ git commit -m "feat: scaffold NestJS api app"
 
 ### Task 4: Prisma 설정 & 스키마
 
-> **구현 메모:** 실제 설치 시 Prisma 7이 설치되었다. Prisma 7은 (1) `schema.prisma`의 `datasource`에서 `url`을 제거하고 `prisma.config.ts`로 옮기며, (2) `prisma-client` 제너레이터로 클라이언트를 `apps/api/generated/prisma/`(gitignore)에 생성하고, (3) `PrismaService`가 `@prisma/adapter-pg` 드라이버 어댑터를 사용한다. 아래 Step 3·5 코드 블록은 Prisma 5 기준 원안이며 실제 구현은 Prisma 7 방식이다. `prisma.config.ts`/`prisma.service.ts`는 머신 고유 연결문자열을 하드코딩하지 않고 `DATABASE_URL`만 사용한다(런타임은 미설정 시 fail-loud). `apps/api/package.json`에 `postinstall: prisma generate`를 두어 프레시 클론·CI에서 클라이언트가 재생성되게 한다.
+> **구현 메모:** 실제 설치 시 Prisma 7이 설치되었다. Prisma 7은 (1) `schema.prisma`의 `datasource`에서 `url`을 제거하고 `prisma.config.ts`로 옮기며, (2) `prisma-client` 제너레이터로 클라이언트를 `apps/api/generated/prisma/`(gitignore)에 생성하고, (3) `PrismaService`가 `@prisma/adapter-pg` 드라이버 어댑터를 사용한다. 아래 Step 3·5 코드 블록은 Prisma 5 기준 원안이며 실제 구현은 Prisma 7 방식이다. `prisma.config.ts`/`prisma.service.ts`는 머신 고유 연결문자열을 하드코딩하지 않고 `DATABASE_URL`만 사용한다(런타임은 미설정 시 fail-loud). `apps/api/package.json`에 `postinstall: prisma generate`를 두어 프레시 클론·CI에서 클라이언트가 재생성되게 한다. 모든 `DateTime` 컬럼은 `@db.Timestamptz(3)`로 타임존을 보존한다(설계서 6절 — 등록일순 정렬 정확성). `prisma.config.ts`는 `DATABASE_URL` 미설정 시 명확히 throw한다(CLI 경로도 fail-loud). `PrismaService`는 `OnModuleDestroy`로 `$disconnect()`한다. `dotenv`·`@types/pg`는 devDependencies에 둔다.
 
 **Files:**
 - Create: `apps/api/prisma/schema.prisma`, `apps/api/prisma.config.ts`, `apps/api/src/prisma/prisma.service.ts`, `apps/api/src/prisma/prisma.module.ts`, `apps/api/.env`, `apps/api/.env.example`
@@ -2218,6 +2218,7 @@ export default handler;
 `docs/superpowers/scraping-notes.md` 또는 `README.md`에 배포 절차 기록:
 - Vercel 프로젝트 2개 생성 (api / web), 각각 Root Directory를 `apps/api` / `apps/web`로 지정
 - api 프로젝트: `DATABASE_URL`, `WEB_ORIGIN` 환경변수 설정, Vercel Postgres 연결
+  - ⚠️ 서버리스 환경: `DATABASE_URL`은 **풀링된(pooled) 연결 문자열**을 사용한다 (Vercel Postgres/Neon의 pooler 엔드포인트). 함수 인스턴스마다 풀이 생기므로 직접 연결을 쓰면 커넥션 한도가 빠르게 소진된다.
 - web 프로젝트: `NEXT_PUBLIC_API_BASE_URL`을 배포된 api URL로 설정
 - api 배포 후 `prisma migrate deploy` 실행
 
