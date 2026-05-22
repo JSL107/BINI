@@ -29,3 +29,6 @@ Thumbs.db
 
 # OMC state
 .omc/
+
+# Claude Code local state
+.claude/
