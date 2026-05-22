@@ -912,6 +912,8 @@ git commit -m "chore: capture naver image search fixture and notes"
 
 ### Task 10: 게임 이미지 서비스 (동시성 제한 포함)
 
+> **구현 메모 (Task 9 조사 반영):** 네이버 이미지 검색 결과는 `<img>` 태그가 아니라 HTML 임베드 JSON의 `"originalUrl":"<url>"` 필드에 있다(`docs/superpowers/scraping-notes.md` 네이버 절 참조). 따라서 `parseFirstImageUrl`은 cheerio `IMAGE_SELECTOR`가 아니라 **정규식** `"originalUrl":"([^"]+)"` 첫 매치를 추출하고 JSON 이스케이프를 해제한다. 없으면 `null`. 픽스처: `apps/api/test/fixtures/naver-image-search.html`. 아래 Step 7의 `naver-image.ts` cheerio 원안은 정규식 방식으로 대체된다.
+
 **Files:**
 - Create: `apps/api/src/image/limit.ts`, `apps/api/src/image/image-provider.ts`, `apps/api/src/image/naver-image.ts`, `apps/api/src/image/game-image.service.ts`, `apps/api/src/image/image.module.ts`
 - Test: `apps/api/src/image/limit.spec.ts`, `apps/api/src/image/naver-image.spec.ts`

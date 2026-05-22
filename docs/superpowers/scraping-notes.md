@@ -126,3 +126,26 @@
     `tabcode`,`direct`), order/pagesize 매핑, 쿠키 불필요, POST 페이지네이션, 행 구조.
   - 불확실: `condition[tabcode]`와 최상위 `tabcode`의 정확한 차이(둘 다 1=전체로 관찰).
     `direct`는 즉시지원 필터(0=전체)로 추정 — 0 외 값은 테스트하지 않음.
+
+## 네이버 이미지 검색 (Task 9 조사)
+
+- **요청**: `GET https://search.naver.com/search.naver?where=image&query=<검색어>`
+  - 헤더: 현실적인 `User-Agent`, `Accept-Language: ko-KR,ko;q=0.9`
+  - 쿠키·API 키·헤드리스 브라우저 **불필요** — plain HTTP GET으로 HTTP 200, ~216KB HTML.
+- **결과 이미지 위치**: 검색 결과 이미지는 `<img>` 태그로 렌더되지 않고(그건 JS가
+  나중에 그림) **HTML 안에 임베드된 JSON**으로 들어있다. 각 결과 객체에
+  `"originalUrl":"<원본 이미지 URL>"` 필드가 있다(한 페이지 약 35개).
+  - 추출 방법: cheerio 선택자가 아니라 **정규식**으로 `"originalUrl":"([^"]+)"` 의
+    첫 매치를 취한다. JSON 문자열 이스케이프(`&`→`&`, `\/`→`/`)를 해제할 것.
+  - 결과 없음: `originalUrl`이 하나도 없으면 `null` 반환.
+  - 참고: Naver 프록시 썸네일(`search.pstatic.net/common/?src=...&type=ff332_332`)도
+    있으나 필드명이 `viewerThumb`/`lensThumb`/`profileImg` 등으로 일관되지 않음 →
+    스크래퍼는 일관된 `originalUrl`을 사용한다.
+- **첫 이미지 기대값 (Task 10 파서 테스트 정답값)**:
+  - 검색어 `원신 게임` 기준 픽스처 `apps/api/test/fixtures/naver-image-search.html`의
+    첫 `originalUrl`:
+    `https://i.namu.wiki/i/MNk5ZUUw5E5ZVACmyvsCbbZm5moRYyKrbXvTg9Ui7SNs1IUpHsMtwH6Xq9dlTQBCaXpsFuhQ3L5WYvdYCDJSVA.webp`
+- **주의 — hotlink**: `originalUrl`은 namu.wiki·블로그·갤러리 등 외부 원본이라
+  앱 `<img>`에서 403(hotlink 차단)이 날 수 있다. → 프론트 `GameImage` 컴포넌트는
+  `<img onError>`로 플레이스홀더 폴백을 반드시 처리할 것(Task 17).
+- 캡처 일시: 2026-05-22. 검색어 `원신 게임`.
