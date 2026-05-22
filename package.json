@@ -10,5 +10,18 @@
   "devDependencies": {
     "typescript": "^5.4.0"
   },
-  "engines": { "node": ">=20", "pnpm": ">=8" }
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/engines",
+      "prisma"
+    ]
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
 }

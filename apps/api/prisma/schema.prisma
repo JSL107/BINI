@@ -1,0 +1,41 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Job {
+  id             String   @id
+  company        String
+  companyUrl     String
+  title          String
+  detailUrl      String
+  deadline       String
+  registeredAt   DateTime
+  tags           String[]
+  gameTitle      String?
+  imageQuery     String
+  imageQueryType String
+  firstSeenAt    DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+
+  @@index([registeredAt])
+  @@map("jobs")
+}
+
+model GameImage {
+  query      String   @id
+  queryType  String
+  imageUrl   String?
+  status     String
+  source     String
+  fetchedAt  DateTime @default(now())
+
+  @@map("game_images")
+}
