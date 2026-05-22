@@ -10,5 +10,5 @@
   "devDependencies": {
     "typescript": "^5.4.0"
   },
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=20", "pnpm": ">=8" }
 }
