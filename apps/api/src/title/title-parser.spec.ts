@@ -1,4 +1,4 @@
-import { parseTitle } from './title-parser';
+import { parseTitle, extractFirstBracket } from './title-parser';
 
 describe('parseTitle', () => {
   it('대괄호가 게임명이면 game 타입으로 분류한다', () => {
@@ -55,5 +55,48 @@ describe('parseTitle', () => {
       imageQuery: '퍼니팩',
       imageQueryType: 'company',
     });
+  });
+
+  it('게임명에 장르 코드가 substring으로 들어있어도 game으로 분류한다', () => {
+    // 'Chaos'는 'aos'를 substring으로 포함하지만 실제 게임 제목이다
+    expect(parseTitle('[Chaos] 원화가 모집', '회사')).toEqual({
+      gameTitle: 'Chaos',
+      imageQuery: 'Chaos 게임',
+      imageQueryType: 'game',
+    });
+  });
+
+  it("게임명이 'soft'로 끝나도 game으로 분류한다", () => {
+    expect(parseTitle('[Herosoft] 배경 원화', '회사')).toEqual({
+      gameTitle: 'Herosoft',
+      imageQuery: 'Herosoft 게임',
+      imageQueryType: 'game',
+    });
+  });
+
+  it('회사명 대체 시 앞뒤 공백을 제거한다', () => {
+    expect(parseTitle('[신규 프로젝트] 원화', '  넥슨  ')).toEqual({
+      gameTitle: null,
+      imageQuery: '넥슨',
+      imageQueryType: 'company',
+    });
+  });
+});
+
+describe('extractFirstBracket', () => {
+  it('앞 공백을 무시하고 첫 대괄호를 추출한다', () => {
+    expect(extractFirstBracket('  [게임명] 디자이너')).toBe('게임명');
+  });
+
+  it('이중 대괄호에서 첫 번째만 추출한다', () => {
+    expect(extractFirstBracket('[디아블로][MMORPG] 원화')).toBe('디아블로');
+  });
+
+  it('빈 대괄호는 빈 문자열을 반환한다', () => {
+    expect(extractFirstBracket('[] 원화가')).toBe('');
+  });
+
+  it('대괄호가 없으면 null을 반환한다', () => {
+    expect(extractFirstBracket('대괄호 없는 제목')).toBeNull();
   });
 });
