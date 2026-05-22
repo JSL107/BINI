@@ -6,7 +6,7 @@
 
 **Architecture:** pnpm 모노레포. NestJS API가 게임잡을 실시간 스크래핑해 Postgres에 upsert하고 REST로 제공한다. Next.js 웹이 공고 목록을 서버에서 받아 즉시 렌더하고, 게임 이미지는 카드별로 비동기 로딩한다. 외부 HTML 의존(게임잡·네이버)은 순수 파서 함수로 격리해 픽스처 기반으로 테스트한다.
 
-**Tech Stack:** NestJS 10, Prisma 5, Vercel Postgres(PostgreSQL), cheerio, Next.js 15(App Router), TypeScript, Jest(api), Vitest + React Testing Library(web), pnpm workspaces.
+**Tech Stack:** NestJS 10, Prisma 7 (driver-adapter 아키텍처, `prisma-client` 제너레이터, `prisma.config.ts`), Vercel Postgres(PostgreSQL), cheerio, Next.js 15(App Router), TypeScript, Jest(api), Vitest + React Testing Library(web), pnpm workspaces.
 
 **관련 문서:** 설계서 `docs/superpowers/specs/2026-05-22-gamejob-wonhwa-scraper-design.md`
 
@@ -89,7 +89,7 @@ Expected: 8.x 이상 버전 출력. 없으면 `npm install -g pnpm` 후 재실�
   "devDependencies": {
     "typescript": "^5.4.0"
   },
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=20", "pnpm": ">=8" }
 }
 ```
 
@@ -105,13 +105,11 @@ packages:
 auto-install-peers=true
 ```
 
-`tsconfig.base.json`:
+`tsconfig.base.json` (앱·패키지가 공통으로 상속하는 보편 옵션만 둔다. `module`/`moduleResolution`은 패키지마다 다르므로 베이스에 두지 않고 각 `tsconfig.json`에서 지정):
 ```json
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
-    "moduleResolution": "node",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -149,16 +147,27 @@ git commit -m "chore: scaffold pnpm monorepo root"
   "version": "0.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": { "build": "tsc -p tsconfig.json" },
   "devDependencies": { "typescript": "^5.4.0" }
 }
 ```
 
-`packages/types/tsconfig.json`:
+`packages/types/tsconfig.json` (`@bini/types`는 CommonJS로 컴파일해 NestJS·Next.js 양쪽에서 소비 가능하게 한다):
 ```json
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": "src" },
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "rootDir": "src"
+  },
   "include": ["src"]
 }
 ```
@@ -231,10 +240,10 @@ Expected: `apps/api/package.json`에 `cheerio`, `@bini/types` 추가.
 
 - [ ] **Step 3: CORS 활성화**
 
-`apps/api/src/main.ts`의 `bootstrap()` 안 `app.listen` 직전에 추가:
+`apps/api/src/main.ts`의 `bootstrap()` 안 `app.listen` 직전에 추가 (`setGlobalPrefix`를 먼저 호출하는 것이 NestJS 관용. CORS 폴백은 와일드카드 대신 로컬 웹 출처로):
 ```ts
-app.enableCors({ origin: process.env.WEB_ORIGIN ?? '*' });
 app.setGlobalPrefix('api');
+app.enableCors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000' });
 ```
 
 - [ ] **Step 4: 부팅 & 테스트 검증**
@@ -253,8 +262,11 @@ git commit -m "feat: scaffold NestJS api app"
 
 ### Task 4: Prisma 설정 & 스키마
 
+> **구현 메모:** 실제 설치 시 Prisma 7이 설치되었다. Prisma 7은 (1) `schema.prisma`의 `datasource`에서 `url`을 제거하고 `prisma.config.ts`로 옮기며, (2) `prisma-client` 제너레이터로 클라이언트를 `apps/api/generated/prisma/`(gitignore)에 생성하고, (3) `PrismaService`가 `@prisma/adapter-pg` 드라이버 어댑터를 사용한다. 아래 Step 3·5 코드 블록은 Prisma 5 기준 원안이며 실제 구현은 Prisma 7 방식이다. `prisma.config.ts`/`prisma.service.ts`는 머신 고유 연결문자열을 하드코딩하지 않고 `DATABASE_URL`만 사용한다(런타임은 미설정 시 fail-loud). `apps/api/package.json`에 `postinstall: prisma generate`를 두어 프레시 클론·CI에서 클라이언트가 재생성되게 한다.
+
 **Files:**
-- Create: `apps/api/prisma/schema.prisma`, `apps/api/src/prisma/prisma.service.ts`, `apps/api/src/prisma/prisma.module.ts`, `apps/api/.env`, `apps/api/.env.example`
+- Create: `apps/api/prisma/schema.prisma`, `apps/api/prisma.config.ts`, `apps/api/src/prisma/prisma.service.ts`, `apps/api/src/prisma/prisma.module.ts`, `apps/api/.env`, `apps/api/.env.example`
+- Modify: `apps/api/src/app.module.ts`, `apps/api/package.json`
 
 - [ ] **Step 1: Prisma 설치 & 초기화**
 
@@ -2153,8 +2165,8 @@ import type { INestApplication } from '@nestjs/common';
 
 export async function createApp(): Promise<INestApplication> {
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: process.env.WEB_ORIGIN ?? '*' });
   app.setGlobalPrefix('api');
+  app.enableCors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000' });
   return app;
 }
 
