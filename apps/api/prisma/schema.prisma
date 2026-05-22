@@ -16,26 +16,28 @@ model Job {
   companyUrl     String
   title          String
   detailUrl      String
-  deadline       String
-  registeredAt   DateTime
+  deadline       String   // 원문 텍스트: "상시" · "채용시" · "04/03(금)" 등 — 날짜가 아닐 수 있어 String 유지
+  registeredAt   DateTime @db.Timestamptz(3)
   tags           String[]
   gameTitle      String?
   imageQuery     String
   imageQueryType String
-  firstSeenAt    DateTime @default(now())
-  lastSeenAt     DateTime @default(now())
+  firstSeenAt    DateTime @default(now()) @db.Timestamptz(3)
+  lastSeenAt     DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([registeredAt])
   @@map("jobs")
 }
 
+// 검색어 → 이미지 URL 캐시. `query`(실제 네이버 검색 문자열)가 PK이며 여러 공고가 한 행을 공유한다.
+// `queryType`은 이 검색어가 게임명/회사명 경로 중 어디서 왔는지 기록하는 정보성 메타데이터(키 아님).
 model GameImage {
   query      String   @id
   queryType  String
   imageUrl   String?
   status     String
   source     String
-  fetchedAt  DateTime @default(now())
+  fetchedAt  DateTime @default(now()) @db.Timestamptz(3)
 
   @@map("game_images")
 }

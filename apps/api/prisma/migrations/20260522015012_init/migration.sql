@@ -6,13 +6,13 @@ CREATE TABLE "jobs" (
     "title" TEXT NOT NULL,
     "detailUrl" TEXT NOT NULL,
     "deadline" TEXT NOT NULL,
-    "registeredAt" TIMESTAMP(3) NOT NULL,
+    "registeredAt" TIMESTAMPTZ(3) NOT NULL,
     "tags" TEXT[],
     "gameTitle" TEXT,
     "imageQuery" TEXT NOT NULL,
     "imageQueryType" TEXT NOT NULL,
-    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "firstSeenAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "jobs_pkey" PRIMARY KEY ("id")
 );
@@ -24,7 +24,7 @@ CREATE TABLE "game_images" (
     "imageUrl" TEXT,
     "status" TEXT NOT NULL,
     "source" TEXT NOT NULL,
-    "fetchedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "fetchedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "game_images_pkey" PRIMARY KEY ("query")
 );
