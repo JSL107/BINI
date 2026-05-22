@@ -652,6 +652,8 @@ git commit -m "chore: capture gamejob wonhwa list fixture and request notes"
 
 ### Task 8: 게임잡 파서 & 스크래퍼 서비스
 
+> **구현 메모 (Task 7 조사 반영):** 요청·선택자의 사실 소스는 `docs/superpowers/scraping-notes.md`다. 핵심: 원화 목록은 GET이 아니라 **`POST https://www.gamejob.co.kr/Recruit/_GI_Job_List/`** (본문 `condition[duty]=5&page=N&order=3&pagesize=40&tabcode=1`, `Content-Type: application/x-www-form-urlencoded; charset=UTF-8`, `X-Requested-With: XMLHttpRequest`, 쿠키 불필요)로 가져온다. 페이지네이션은 본문 `page` 값을 바꿔 호출(GET `?Page=N`은 필터가 풀리므로 쓰지 않음). 행 구조: `table.tblList > tbody > tr`. 총 페이지 수는 `<span class="totalJobcnt">(266)</span>`를 읽어 `ceil(n/40)`로 계산. 픽스처는 `apps/api/test/fixtures/gamejob-wonhwa-list.html`(40행). 아래 Step 3·5 코드의 `ROW_SELECTOR`/`buildUrl` 등 원안은 scraping-notes.md 기준으로 대체된다.
+
 **Files:**
 - Create: `apps/api/src/scraper/gamejob-parser.ts`, `apps/api/src/scraper/gamejob-scraper.service.ts`, `apps/api/src/scraper/scraper.module.ts`
 - Test: `apps/api/src/scraper/gamejob-parser.spec.ts`
