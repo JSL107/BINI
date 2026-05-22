@@ -149,3 +149,17 @@
   앱 `<img>`에서 403(hotlink 차단)이 날 수 있다. → 프론트 `GameImage` 컴포넌트는
   `<img onError>`로 플레이스홀더 폴백을 반드시 처리할 것(Task 17).
 - 캡처 일시: 2026-05-22. 검색어 `원신 게임`.
+
+## 통합 검증 통과 (Task 14 — 2026-05-22)
+
+로컬 API(`pnpm --filter api start`, 포트 3000) + Docker Postgres(`bini-pg`, 5433)로 검증:
+- `GET /api/jobs?page=1` → HTTP 200, `{page:1,totalPages:7,jobs:[40]}` — 실시간 게임잡
+  원화 스크래핑 → DB upsert → 등록일순 반환 정상.
+- `GET /api/game-image?q=원신 게임&type=game` → `found`, namu.wiki 이미지.
+- `GET /api/game-image?q=넥슨&type=company` → `found`, 네이버 이미지.
+- `GET /api/game-image?q=` (빈 검색어) → `not_found` (가드 작동).
+- 동일 쿼리 2회차 → 0.005s (DB 캐시 히트 작동).
+- 런타임 이슈 1건 발견·수정: `main.ts`가 `.env`를 로드하지 않아 `DATABASE_URL`
+  미설정 → `import 'dotenv/config'` 추가, `dotenv`를 dependencies로 이동.
+- 주의: 한글 쿼리는 UTF-8 percent-encoding으로 보내야 함. 웹 클라이언트의
+  `encodeURIComponent`가 이를 보장함.
