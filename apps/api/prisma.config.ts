@@ -7,6 +7,6 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env.DATABASE_URL ?? "postgresql://postgres:bini@localhost:5433/bini",
+    url: process.env.DATABASE_URL!,
   },
 });
