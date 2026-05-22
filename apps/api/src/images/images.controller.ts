@@ -17,7 +17,7 @@ export class ImagesController {
     @Query('q') q?: string | string[],
     @Query('type') type?: string | string[],
   ): Promise<GameImageResponse> {
-    const queryType: ImageQueryType = first(type) === 'company' ? 'company' : 'game';
+    const queryType: ImageQueryType = first(type).trim() === 'company' ? 'company' : 'game';
     return this.imagesService.resolve(first(q).trim(), queryType);
   }
 }

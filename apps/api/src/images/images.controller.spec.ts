@@ -35,4 +35,10 @@ describe('ImagesController', () => {
     await controller.getImage(['  원신 게임  ', 'b'], ['company', 'game']);
     expect(resolve).toHaveBeenCalledWith('원신 게임', 'company');
   });
+
+  it('type의 앞뒤 공백을 제거하고 판정한다', async () => {
+    const { controller, resolve } = build();
+    await controller.getImage('넥슨', '  company  ');
+    expect(resolve).toHaveBeenCalledWith('넥슨', 'company');
+  });
 });
