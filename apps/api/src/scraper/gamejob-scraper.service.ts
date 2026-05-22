@@ -27,16 +27,23 @@ export class GamejobScraperService {
       tabcode: '1',
     }).toString();
 
-    const res = await fetch(LIST_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'User-Agent': USER_AGENT,
-        'Accept-Language': 'ko-KR,ko;q=0.9',
-      },
-      body,
-    });
+    let res: Response;
+    try {
+      res = await fetch(LIST_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest',
+          'User-Agent': USER_AGENT,
+          'Accept-Language': 'ko-KR,ko;q=0.9',
+        },
+        body,
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new BadGatewayException(`게임잡 요청 실패: ${message}`);
+    }
     if (!res.ok) {
       throw new BadGatewayException(`게임잡 요청 실패: HTTP ${res.status}`);
     }

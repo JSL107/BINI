@@ -37,4 +37,13 @@ describe('parseTotalPages', () => {
   it('266건이면 ceil(266/40) = 7 페이지를 반환한다', () => {
     expect(parseTotalPages(html)).toBe(7);
   });
+
+  it('공고 수가 없으면 1을 반환한다', () => {
+    expect(parseTotalPages('<html><body></body></html>')).toBe(1);
+  });
+
+  it('콤마가 포함된 공고 수도 올바르게 계산한다', () => {
+    const html = '<span class="totalJobcnt">(1,266)</span>';
+    expect(parseTotalPages(html)).toBe(32); // ceil(1266 / 40)
+  });
 });
