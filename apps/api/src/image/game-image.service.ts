@@ -27,6 +27,7 @@ export class GameImageService implements ImageProvider {
         headers: {
           'User-Agent': USER_AGENT,
           'Accept-Language': 'ko-KR,ko;q=0.9',
+          Referer: 'https://www.naver.com/',
         },
       });
       if (!res.ok) {
