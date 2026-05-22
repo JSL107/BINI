@@ -478,7 +478,7 @@ function isNonGame(bracket: string): boolean {
   if (t.length === 0) return true;
   if (GENERIC_TERMS.some((w) => t === w.toLowerCase())) return true;
   if (GENRE_TERMS.some((w) => t.includes(w))) return true;
-  if (PLATFORM_REGION_EMPLOYMENT.some((w) => t.includes(w))) return true;
+  if (PLATFORM_REGION_EMPLOYMENT.some((w) => t === w.toLowerCase())) return true; // 정확 매칭 — '모바일'이 '던파모바일2D'를 오탐하지 않도록
   if (ORG_SUFFIXES.some((w) => t.endsWith(w))) return true;
   if (t.includes('/')) return true; // "부산/인턴" 같은 복합 태그
   return false;
