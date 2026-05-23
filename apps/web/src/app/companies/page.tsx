@@ -21,6 +21,17 @@ export default async function CompaniesPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
+      <nav className="mb-6 flex items-center gap-4 text-sm">
+        <a href="/" className="text-gray-600 hover:text-gray-900 hover:underline">
+          공고 목록
+        </a>
+        <a href="/companies" className="font-semibold text-gray-900">
+          회사 채용 페이지
+        </a>
+        <a href="/stats" className="text-gray-600 hover:text-gray-900 hover:underline">
+          통계
+        </a>
+      </nav>
       <header className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">게임 회사 채용 페이지</h1>
         <p className="mt-2 text-sm text-gray-500">

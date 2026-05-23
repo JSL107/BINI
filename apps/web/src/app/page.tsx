@@ -24,6 +24,9 @@ export default async function Home({
         <a href="/companies" className="text-gray-600 hover:text-gray-900 hover:underline">
           회사 채용 페이지
         </a>
+        <a href="/stats" className="text-gray-600 hover:text-gray-900 hover:underline">
+          통계
+        </a>
       </nav>
       <h1 className="mb-6 text-2xl font-bold">게임 원화 채용공고</h1>
       {data.jobs.length === 0 ? (

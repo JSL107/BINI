@@ -69,3 +69,25 @@ export interface CareerSitesResponse {
   source: string; // 'github:GameForPeople/korea-game-career-site'
   fetchedAt: string; // ISO 8601
 }
+
+/** GET /api/stats 응답. 멀티소스 적재·만료·신규 현황을 요약. */
+export interface StatsResponse {
+  /** DB의 총 공고 수 */
+  total: number;
+  /** 만료 처리되지 않은 공고 수 (total - expired) */
+  active: number;
+  /** expiredAt이 set된 공고 수 */
+  expired: number;
+  /** 최근 24h 내에 firstSeenAt이 찍힌 공고 수 */
+  newLast24h: number;
+  /** detailScrapedAt이 set된 공고 수 (이미지/회사정보 enrichment 완료) */
+  enrichedCount: number;
+  /** 0..1 — enrichedCount / total */
+  enrichedRatio: number;
+  /** 소스별 공고 수 — 모든 JobSource 키가 항상 존재(0이면 0) */
+  bySource: Record<JobSource, number>;
+  /** 가장 최근 lastSeenAt — cron이 마지막으로 적재한 시각 추정치 */
+  lastCronRunAt: string | null;
+  /** 응답 생성 시각 */
+  generatedAt: string;
+}
