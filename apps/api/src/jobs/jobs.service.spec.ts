@@ -30,7 +30,7 @@ describe('JobsService', () => {
     await service.getJobsPage(1);
     expect(upsert).toHaveBeenCalledTimes(1);
     const arg: any = upsert.mock.calls[0][0];
-    expect(arg.where).toEqual({ id: '278454' });
+    expect(arg.where).toEqual({ id: 'gamejob:278454' });
     expect(arg.create.gameTitle).toBe('p.일렌시아');
     expect(arg.create.imageQueryType).toBe('game');
   });

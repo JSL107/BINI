@@ -12,6 +12,8 @@ datasource db {
 
 model Job {
   id             String   @id
+  source         String   // 'gamejob' | 'wanted' — id 앞 prefix와 동일
+  sourceId       String   // 원본 사이트의 공고 ID (prefix 없는 값)
   company        String
   companyUrl     String
   title          String
@@ -25,7 +27,14 @@ model Job {
   firstSeenAt    DateTime @default(now()) @db.Timestamptz(3)
   lastSeenAt     DateTime @default(now()) @db.Timestamptz(3)
 
+  // 상세페이지 enrichment — /api/job-images?id= 최초 호출 시 lazy 채움
+  companyLogoUrl      String?
+  companyPhotos       String[] @default([])
+  representativeGames String[] @default([])
+  detailScrapedAt     DateTime? @db.Timestamptz(3)
+
   @@index([registeredAt])
+  @@index([source])
   @@map("jobs")
 }
 
