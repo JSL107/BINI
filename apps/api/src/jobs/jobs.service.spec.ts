@@ -4,7 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 
 describe('JobsService', () => {
   const sampleRaw = {
-    id: '278454',
+    source: 'gamejob' as const,
+    sourceId: '278454',
     company: '게임듀오',
     companyUrl: 'https://www.gamejob.co.kr/Company/Detail?M=1',
     title: '[p.일렌시아] 배경 도트 디자이너',

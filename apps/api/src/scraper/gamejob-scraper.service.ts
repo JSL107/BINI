@@ -1,17 +1,16 @@
 import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
-import { parseJobList, parseTotalPages, RawJob } from './gamejob-parser';
-
-export interface ScrapeResult {
-  jobs: RawJob[];
-  totalPages: number;
-}
+import type { JobSource } from '@bini/types';
+import { parseJobList, parseTotalPages } from './gamejob-parser';
+import type { ScrapeResult } from './raw-job';
+import type { JobScraper } from './scraper.interface';
 
 const LIST_URL = 'https://www.gamejob.co.kr/Recruit/_GI_Job_List/';
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
 @Injectable()
-export class GamejobScraperService {
+export class GamejobScraperService implements JobScraper {
+  readonly source: JobSource = 'gamejob';
   private readonly logger = new Logger(GamejobScraperService.name);
 
   /** 원화 직종 목록의 지정 페이지를 등록일순으로 스크래핑한다. */

@@ -25,8 +25,8 @@ export class JobsService {
       // registeredAt은 create에만 둔다 — 재스크래핑 시 상대시간 재계산값으로
       // 최초 등록시각을 덮어쓰면 정렬이 흔들리고, 미해석 시 epoch로 가라앉는다.
       const common = {
-        source: 'gamejob' as const,
-        sourceId: raw.id,
+        source: raw.source,
+        sourceId: raw.sourceId,
         company: raw.company,
         companyUrl: raw.companyUrl,
         title: raw.title,
@@ -37,9 +37,10 @@ export class JobsService {
         imageQuery: parsed.imageQuery,
         imageQueryType: parsed.imageQueryType,
       };
+      const id = `${raw.source}:${raw.sourceId}`;
       return this.prisma.job.upsert({
-        where: { id: `gamejob:${raw.id}` },
-        create: { id: `gamejob:${raw.id}`, ...common, registeredAt },
+        where: { id },
+        create: { id, ...common, registeredAt },
         update: { ...common, lastSeenAt: now },
       });
     });
@@ -50,7 +51,7 @@ export class JobsService {
     }
     this.logger.log(`page ${page}: ${rawJobs.length}건 스크래핑·upsert 완료`);
 
-    const ids = rawJobs.map((r) => `gamejob:${r.id}`);
+    const ids = rawJobs.map((r) => `${r.source}:${r.sourceId}`);
     const rows = await this.prisma.job.findMany({
       where: { id: { in: ids } },
       // 같은 registeredAt 동률 시 안정 정렬을 위해 id를 보조 키로 사용.

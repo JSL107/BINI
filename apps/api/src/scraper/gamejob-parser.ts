@@ -1,15 +1,5 @@
 import * as cheerio from 'cheerio';
-
-export interface RawJob {
-  id: string;
-  company: string;
-  companyUrl: string;
-  title: string;
-  detailUrl: string;
-  deadline: string;
-  registeredAtText: string;
-  tags: string[];
-}
+import type { RawJob } from './raw-job';
 
 const BASE_URL = 'https://www.gamejob.co.kr';
 
@@ -84,7 +74,8 @@ export function parseJobList(html: string): RawJob[] {
     });
 
     jobs.push({
-      id,
+      source: 'gamejob',
+      sourceId: id,
       company,
       companyUrl,
       title,
