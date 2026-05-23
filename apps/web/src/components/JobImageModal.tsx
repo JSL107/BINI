@@ -47,6 +47,9 @@ export function JobImageModal({
 
   const [tab, setTab] = useState<ImageTab>(initial.tab);
   const [index, setIndex] = useState(initial.index);
+  // Track URLs that failed to load. On each new open we reset, so prior failures
+  // don't permanently hide working images.
+  const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -60,6 +63,7 @@ export function JobImageModal({
     if (open) {
       setTab(initial.tab);
       setIndex(initial.index);
+      setFailedUrls(new Set());
     }
   }, [open, initial]);
 
@@ -137,6 +141,7 @@ export function JobImageModal({
   const switchTab = (next: ImageTab) => {
     setTab(next);
     setIndex(0);
+    setFailedUrls(new Set());
   };
 
   return (
@@ -193,17 +198,40 @@ export function JobImageModal({
         {/* Image area — fixed letterbox frame keeps all slides visually uniform
             regardless of source aspect ratio. */}
         <div className="relative flex aspect-[16/9] w-[80vw] max-w-5xl items-center justify-center rounded bg-black/85 shadow-xl">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            key={url}
-            src={url}
-            alt={alt}
-            className="max-h-full max-w-full object-contain"
-            onError={() => {
-              if (urls.length <= 1) onCloseRef.current();
-              else setIndex((i) => (i + 1) % urls.length);
-            }}
-          />
+          {failedUrls.has(url) ? (
+            <div className="flex flex-col items-center gap-2 px-6 text-center text-white/90">
+              <p className="text-sm">이미지를 불러올 수 없습니다</p>
+              <p className="text-xs text-white/60">
+                소스가 핫링크를 차단했거나 URL이 만료된 경우입니다.
+              </p>
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-block rounded bg-white/15 px-3 py-1 text-xs hover:bg-white/25"
+              >
+                원본 새 창에서 시도 ↗
+              </a>
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={url}
+              src={url}
+              alt={alt}
+              className="max-h-full max-w-full object-contain"
+              onError={() => {
+                // 실패 URL만 표시하고 자동 advance하지 않는다 — 여러 슬라이드가 모두 실패할 때
+                // 무한 ←→ 토글 루프가 발생하던 버그 방지. 사용자가 prev/next로 직접 이동.
+                setFailedUrls((s) => {
+                  if (s.has(url)) return s;
+                  const next = new Set(s);
+                  next.add(url);
+                  return next;
+                });
+              }}
+            />
+          )}
           <button
             type="button"
             aria-label="닫기"
