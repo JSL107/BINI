@@ -4,6 +4,7 @@ import { GamejobDetailService } from './gamejob-detail.service';
 import { WantedScraperService } from './wanted-scraper.service';
 import { JobkoreaScraperService } from './jobkorea-scraper.service';
 import { SaraminScraperService } from './saramin-scraper.service';
+import { IncruitScraperService } from './incruit-scraper.service';
 
 @Module({
   providers: [
@@ -12,6 +13,7 @@ import { SaraminScraperService } from './saramin-scraper.service';
     WantedScraperService,
     JobkoreaScraperService,
     SaraminScraperService,
+    IncruitScraperService,
   ],
   exports: [
     GamejobScraperService,
@@ -19,6 +21,7 @@ import { SaraminScraperService } from './saramin-scraper.service';
     WantedScraperService,
     JobkoreaScraperService,
     SaraminScraperService,
+    IncruitScraperService,
   ],
 })
 export class ScraperModule {}

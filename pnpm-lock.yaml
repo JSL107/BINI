@@ -38,6 +38,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      iconv-lite:
+        specifier: ^0.6.3
+        version: 0.6.3
       pg:
         specifier: ^8.21.0
         version: 8.21.0
