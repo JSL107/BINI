@@ -191,3 +191,22 @@
 ### 원티드 첫 공고 기대값 (Task 5 테스트 정답 — wanted-list.json, cat=959, art filter 적용 시)
 - sourceId: 363812 (예시 — 실제 픽스처에서 art 매칭 첫 건은 "2D 모션그래픽 디자이너 | 하이퍼앰코리아")
   Note: 픽스처 캡처 시점에 따라 첫 매칭 ID·회사가 다를 수 있음. 파서 테스트는 `expect.objectContaining`로 회사·제목 패턴만 검증.
+
+## Phase 1 다중 소스 통합 검증 (2026-05-23)
+
+`GET /api/jobs?page=1` 라이브 호출 결과 — 게임잡 + 원티드 통합 정상 작동:
+- HTTP 200, 434ms
+- `jobs.length = 41` (게임잡 40 + 원티드 1)
+- `sources distribution = { gamejob: 40, wanted: 1 }` — 두 소스 모두 활성
+- `failedSources = undefined` — 부분 실패 없음
+- `totalPages = 7` (소스별 최대값)
+- ID 형식: `gamejob:<GI_No>` / `wanted:<wd_id>` 확인 (예: `gamejob:280563`)
+- 이 스냅샷에서 dedup 충돌은 0건 — 두 소스의 원화 공고가 서로 다른 회사이기 때문.
+  dedup 로직 자체는 단위 테스트(`dedupe.spec.ts` 8건)에서 검증됨.
+- 원티드 client-side art 필터 결과: 페이지당 ~1건. "best-effort 보조 소스"로서
+  의도된 수준. 향후 Wanted 게임 아트 전용 카테고리 ID 발견 시 교체 가능.
+
+### 알려진 후속 작업
+- **Phase 2:** 잡코리아/사람인/인크루트 (Cloudflare 차단 시 Browserless 도입)
+- **Phase 3:** GameForPeople/korea-game-career-site 메타-소스 + 자사 ATS(Greenhouse/Lever/Greeting)
+- 웹 빌드: 사용자의 `JobImageCarousel` 모달 탭 분리 WIP 때문에 현재 깨져 있음 (Phase 1 작업과 무관 — 그쪽 진행 중인 별도 브랜치/작업에서 정리).
