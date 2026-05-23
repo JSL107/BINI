@@ -42,10 +42,14 @@ export interface GameImageResponse {
   status: ImageStatus;
 }
 
-/** GET /api/job-images?id=<GI_No> 응답. 상세페이지 enrichment를 한 번에 묶어 반환. */
+/** GET /api/job-images?id=<id> 응답. 상세페이지 enrichment를 한 번에 묶어 반환. */
 export interface JobImagesResponse {
-  /** 카루셀 슬라이드용 이미지 URL 배열 (현재 단계: GameJob 회사 사진). */
+  /** 우선순위 순으로 합친 전체 이미지 URL 배열 (카루셀 카드 표면용). */
   images: string[];
+  /** 게임 관련 이미지: 대표게임 네이버 검색 결과 + 브래킷 게임 네이버 결과 (모달 "게임" 탭). */
+  gameImages: string[];
+  /** GameJob 상세페이지의 회사 사진 (모달 "회사" 탭). */
+  companyPhotos: string[];
   companyLogoUrl: string | null;
   representativeGames: string[];
 }

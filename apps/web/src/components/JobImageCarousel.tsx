@@ -7,7 +7,13 @@ import { JobImageModal } from './JobImageModal';
 
 type State =
   | { kind: 'loading' }
-  | { kind: 'ready'; urls: string[]; index: number }
+  | {
+      kind: 'ready';
+      urls: string[];
+      index: number;
+      gameImages: string[];
+      companyPhotos: string[];
+    }
   | { kind: 'placeholder' };
 
 export interface JobImageCarouselProps {
@@ -45,13 +51,25 @@ export function JobImageCarousel({
         const jobImages = await fetchJobImages(jobId);
         if (!alive) return;
         if (jobImages.images.length > 0) {
-          setState({ kind: 'ready', urls: jobImages.images, index: 0 });
+          setState({
+            kind: 'ready',
+            urls: jobImages.images,
+            index: 0,
+            gameImages: jobImages.gameImages,
+            companyPhotos: jobImages.companyPhotos,
+          });
           return;
         }
         const single = await fetchGameImage(fallbackQuery, fallbackType);
         if (!alive) return;
         if (single.imageUrl) {
-          setState({ kind: 'ready', urls: [single.imageUrl], index: 0 });
+          setState({
+            kind: 'ready',
+            urls: [single.imageUrl],
+            index: 0,
+            gameImages: [single.imageUrl],
+            companyPhotos: [],
+          });
         } else {
           setState({ kind: 'placeholder' });
         }
@@ -79,7 +97,7 @@ export function JobImageCarousel({
       if (s.kind !== 'ready') return s;
       const next = s.urls.filter((u) => u !== failedUrl);
       if (next.length === 0) return { kind: 'placeholder' };
-      return { kind: 'ready', urls: next, index: Math.min(s.index, next.length - 1) };
+      return { ...s, urls: next, index: Math.min(s.index, next.length - 1) };
     });
   };
 
@@ -115,7 +133,7 @@ export function JobImageCarousel({
     );
   }
 
-  const { urls, index } = state;
+  const { urls, index, gameImages, companyPhotos } = state;
   const url = urls[index];
   const multi = urls.length > 1;
 
@@ -211,8 +229,9 @@ export function JobImageCarousel({
       </div>
       <JobImageModal
         open={modalOpen}
-        urls={urls}
-        initialIndex={index}
+        gameImages={gameImages}
+        companyPhotos={companyPhotos}
+        initialUrl={url}
         alt={alt}
         onClose={closeModal}
       />

@@ -6,6 +6,8 @@ import { ImagesService } from './images.service';
 
 const EMPTY: JobImagesResponse = {
   images: [],
+  gameImages: [],
+  companyPhotos: [],
   companyLogoUrl: null,
   representativeGames: [],
 };
@@ -59,7 +61,7 @@ export class JobImagesService {
       });
     }
 
-    const images = await this.combineImages({
+    const { gameImages, companyPhotos, images } = await this.combineImages({
       imageQuery: job.imageQuery,
       imageQueryType: job.imageQueryType,
       representativeGames: job.representativeGames,
@@ -68,6 +70,8 @@ export class JobImagesService {
 
     return {
       images,
+      gameImages,
+      companyPhotos,
       companyLogoUrl: job.companyLogoUrl,
       representativeGames: job.representativeGames,
     };
@@ -85,7 +89,7 @@ export class JobImagesService {
     imageQueryType: string;
     representativeGames: string[];
     companyPhotos: string[];
-  }): Promise<string[]> {
+  }): Promise<{ gameImages: string[]; companyPhotos: string[]; images: string[] }> {
     // Dedup query strings BEFORE hitting Naver (avoid wasted network round-trips).
     const uniqueGames = Array.from(new Set(job.representativeGames));
 
@@ -108,21 +112,30 @@ export class JobImagesService {
       bracketPromise,
     ]);
 
-    const repUrls = repResults.filter((u): u is string => !!u);
-    const all = [
-      ...repUrls,
+    // "게임 관련" 탭용: 대표게임 네이버 + 브래킷 게임 네이버 (URL 기준 dedup)
+    const gameImages = dedup([
+      ...repResults.filter((u): u is string => !!u),
       ...(bracketUrl ? [bracketUrl] : []),
-      ...job.companyPhotos,
-    ];
+    ]);
 
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const url of all) {
-      if (!seen.has(url)) {
-        seen.add(url);
-        out.push(url);
-      }
-    }
-    return out;
+    // "회사" 탭용: 게임잡 상세페이지의 회사 사진 (이미 parser 단계에서 dedup됨)
+    const companyPhotos = job.companyPhotos;
+
+    // 카드 표면 카루셀용: 두 그룹을 우선순위 순으로 합친 뒤 dedup (게임 우선)
+    const images = dedup([...gameImages, ...companyPhotos]);
+
+    return { gameImages, companyPhotos, images };
   }
+}
+
+function dedup(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const url of urls) {
+    if (!seen.has(url)) {
+      seen.add(url);
+      out.push(url);
+    }
+  }
+  return out;
 }
