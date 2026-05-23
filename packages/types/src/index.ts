@@ -1,6 +1,6 @@
 export type ImageQueryType = 'game' | 'company';
 export type ImageStatus = 'found' | 'not_found' | 'error' | 'blocked';
-export type JobSource = 'gamejob' | 'wanted' | 'jobkorea';
+export type JobSource = 'gamejob' | 'wanted' | 'jobkorea' | 'saramin';
 
 export interface AlternateSource {
   source: JobSource;
@@ -27,6 +27,8 @@ export interface Job {
   companyPhotos: string[];
   /** GameJob 상세페이지의 "대표게임" 리스트. 미스크랩이거나 회사가 "-"로 비워두면 빈 배열. */
   representativeGames: string[];
+  /** lastSeenAt + 7일이 경과했거나 cron이 명시적으로 만료 처리한 공고. 프론트가 표시 여부 결정. */
+  expired: boolean;
 }
 
 export interface JobsResponse {
