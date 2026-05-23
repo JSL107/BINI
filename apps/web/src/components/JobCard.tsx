@@ -1,6 +1,16 @@
-import type { Job } from '@bini/types';
+import type { Job, JobSource } from '@bini/types';
 import { JobImageCarousel } from './JobImageCarousel';
 import { CompanyAvatar } from './CompanyAvatar';
+
+const SOURCE_LABEL: Record<JobSource, string> = {
+  gamejob: '게임잡',
+  wanted: '원티드',
+};
+
+const SOURCE_COLOR: Record<JobSource, string> = {
+  gamejob: 'bg-blue-100 text-blue-700',
+  wanted: 'bg-purple-100 text-purple-700',
+};
 
 export function JobCard({ job }: { job: Job }) {
   return (
@@ -14,6 +24,14 @@ export function JobCard({ job }: { job: Job }) {
       <div className="space-y-2 p-4">
         <div className="flex items-center gap-2">
           <CompanyAvatar logoUrl={job.companyLogoUrl} name={job.company} />
+          <span
+            className={`rounded px-1.5 py-0.5 text-xs font-medium ${SOURCE_COLOR[job.source]}`}
+          >
+            {SOURCE_LABEL[job.source]}
+            {job.alternateSources.length > 0 && (
+              <span className="ml-1 opacity-70">+{job.alternateSources.length}</span>
+            )}
+          </span>
           <p className="text-sm text-gray-500">{job.company}</p>
         </div>
         <a

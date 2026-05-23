@@ -67,4 +67,38 @@ describe('JobCard', () => {
     expect(screen.getByText('신입')).toBeInTheDocument();
     expect(screen.getByText('경기')).toBeInTheDocument();
   });
+
+  describe('source badge', () => {
+    it('renders the wanted source label', () => {
+      const job: Job = { ...baseJob, source: 'wanted' as const };
+      render(<JobCard job={job} />);
+      expect(screen.getByText(/원티드/i)).toBeInTheDocument();
+    });
+
+    it('renders the gamejob source label by default', () => {
+      const job: Job = { ...baseJob, source: 'gamejob' as const };
+      render(<JobCard job={job} />);
+      expect(screen.getByText(/게임잡/i)).toBeInTheDocument();
+    });
+
+    it('renders +N alternateSources count when present', () => {
+      const job: Job = {
+        ...baseJob,
+        source: 'gamejob' as const,
+        alternateSources: [{ source: 'wanted' as const, detailUrl: 'https://wt/1' }],
+      };
+      render(<JobCard job={job} />);
+      expect(screen.getByText(/\+1/)).toBeInTheDocument();
+    });
+
+    it('does not render +N when alternateSources is empty', () => {
+      const job: Job = {
+        ...baseJob,
+        source: 'gamejob' as const,
+        alternateSources: [],
+      };
+      render(<JobCard job={job} />);
+      expect(screen.queryByText(/\+\d+/)).not.toBeInTheDocument();
+    });
+  });
 });
