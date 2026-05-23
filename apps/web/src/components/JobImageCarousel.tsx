@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ImageQueryType } from '@bini/types';
 import { fetchGameImage, fetchJobImages } from '../lib/api';
+import { JobImageModal } from './JobImageModal';
 
 type State =
   | { kind: 'loading' }
@@ -32,6 +33,7 @@ export function JobImageCarousel({
   alt,
 }: JobImageCarouselProps) {
   const [state, setState] = useState<State>({ kind: 'loading' });
+  const [modalOpen, setModalOpen] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
@@ -105,54 +107,85 @@ export function JobImageCarousel({
   const multi = urls.length > 1;
 
   return (
-    <div
-      data-testid="image-carousel"
-      className="relative h-48 w-full overflow-hidden bg-gray-100"
-      onTouchStart={(e) => {
-        touchStartX.current = e.touches[0]?.clientX ?? null;
-      }}
-      onTouchEnd={(e) => {
-        if (touchStartX.current == null) return;
-        const endX = e.changedTouches[0]?.clientX ?? touchStartX.current;
-        const dx = endX - touchStartX.current;
-        touchStartX.current = null;
-        if (Math.abs(dx) > 40) advance(dx < 0 ? 1 : -1);
-      }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        key={url}
-        src={url}
+    <>
+      <div
+        data-testid="image-carousel"
+        className="group relative h-48 w-full overflow-hidden bg-gray-100"
+        onTouchStart={(e) => {
+          touchStartX.current = e.touches[0]?.clientX ?? null;
+        }}
+        onTouchEnd={(e) => {
+          if (touchStartX.current == null) return;
+          const endX = e.changedTouches[0]?.clientX ?? touchStartX.current;
+          const dx = endX - touchStartX.current;
+          touchStartX.current = null;
+          if (Math.abs(dx) > 40) advance(dx < 0 ? 1 : -1);
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          key={url}
+          src={url}
+          alt={alt}
+          title="클릭해서 크게 보기"
+          className="h-48 w-full cursor-zoom-in object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+          onError={() => dropFailed(url)}
+          onClick={() => setModalOpen(true)}
+        />
+        {/* 클릭 affordance: 항상 보이는 매그니파이어 배지 + 호버 시 라벨 */}
+        <span
+          aria-hidden="true"
+          data-testid="zoom-affordance"
+          className="pointer-events-none absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/80 text-base shadow ring-1 ring-black/5 opacity-80 transition-opacity group-hover:opacity-100"
+        >
+          ⛶
+        </span>
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
+        >
+          클릭해서 크게 보기
+        </span>
+        {multi && (
+          <>
+            <button
+              type="button"
+              aria-label="이전 이미지"
+              onClick={(e) => {
+                e.stopPropagation();
+                advance(-1);
+              }}
+              className="absolute left-1 top-1/2 -translate-y-1/2 rounded-full bg-white/80 px-2 py-1 text-base shadow hover:bg-white"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              aria-label="다음 이미지"
+              onClick={(e) => {
+                e.stopPropagation();
+                advance(1);
+              }}
+              className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full bg-white/80 px-2 py-1 text-base shadow hover:bg-white"
+            >
+              ›
+            </button>
+            <span
+              data-testid="image-index"
+              className="absolute bottom-1 right-2 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white"
+            >
+              {index + 1} / {urls.length}
+            </span>
+          </>
+        )}
+      </div>
+      <JobImageModal
+        open={modalOpen}
+        urls={urls}
+        initialIndex={index}
         alt={alt}
-        className="h-48 w-full object-cover"
-        onError={() => dropFailed(url)}
+        onClose={() => setModalOpen(false)}
       />
-      {multi && (
-        <>
-          <button
-            type="button"
-            aria-label="이전 이미지"
-            onClick={() => advance(-1)}
-            className="absolute left-1 top-1/2 -translate-y-1/2 rounded-full bg-white/80 px-2 py-1 text-base shadow hover:bg-white"
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            aria-label="다음 이미지"
-            onClick={() => advance(1)}
-            className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full bg-white/80 px-2 py-1 text-base shadow hover:bg-white"
-          >
-            ›
-          </button>
-          <span
-            data-testid="image-index"
-            className="absolute bottom-1 right-2 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white"
-          >
-            {index + 1} / {urls.length}
-          </span>
-        </>
-      )}
-    </div>
+    </>
   );
 }
