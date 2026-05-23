@@ -2,6 +2,7 @@ import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import type { Job, JobSource, JobsResponse } from '@bini/types';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { WantedScraperService } from '../scraper/wanted-scraper.service';
+import { JobkoreaScraperService } from '../scraper/jobkorea-scraper.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseTitle } from '../title/title-parser';
 import { parseRelativeTime } from '../time/relative-time';
@@ -17,9 +18,10 @@ export class JobsService {
   constructor(
     gamejob: GamejobScraperService,
     wanted: WantedScraperService,
+    jobkorea: JobkoreaScraperService,
     private readonly prisma: PrismaService,
   ) {
-    this.scrapers = [gamejob, wanted];
+    this.scrapers = [gamejob, wanted, jobkorea];
   }
 
   /**
@@ -112,6 +114,10 @@ export class JobsService {
   }
 }
 
+function isJobSource(s: string): s is JobSource {
+  return s === 'gamejob' || s === 'wanted' || s === 'jobkorea';
+}
+
 function toJobDto(
   row: {
     id: string; source: string; company: string; companyUrl: string;
@@ -124,7 +130,7 @@ function toJobDto(
 ): Job {
   const imageQueryType: Job['imageQueryType'] =
     row.imageQueryType === 'game' ? 'game' : 'company';
-  const source: JobSource = row.source === 'wanted' ? 'wanted' : 'gamejob';
+  const source: JobSource = isJobSource(row.source) ? row.source : 'gamejob';
   return {
     id: row.id,
     source,

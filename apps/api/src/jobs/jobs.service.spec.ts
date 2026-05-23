@@ -1,6 +1,7 @@
 import { JobsService } from './jobs.service';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { WantedScraperService } from '../scraper/wanted-scraper.service';
+import { JobkoreaScraperService } from '../scraper/jobkorea-scraper.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RawJob } from '../scraper/raw-job';
 
@@ -9,6 +10,7 @@ type ScrapeOk = { jobs: RawJob[]; totalPages: number };
 function build(
   gjResult: ScrapeOk | Error,
   wtResult: ScrapeOk | Error,
+  jkResult: ScrapeOk | Error,
 ) {
   const upsert = jest.fn().mockResolvedValue(undefined);
   const findMany = jest.fn().mockResolvedValue([]);
@@ -18,7 +20,7 @@ function build(
     $transaction,
   } as unknown as PrismaService;
 
-  const mkScraper = (src: 'gamejob' | 'wanted', r: any) =>
+  const mkScraper = (src: 'gamejob' | 'wanted' | 'jobkorea', r: any) =>
     ({
       source: src,
       fetchJobList: jest.fn(() =>
@@ -28,13 +30,15 @@ function build(
 
   const gj = mkScraper('gamejob', gjResult);
   const wt = mkScraper('wanted', wtResult);
+  const jk = mkScraper('jobkorea', jkResult);
   return {
-    service: new JobsService(gj, wt, prisma),
+    service: new JobsService(gj, wt, jk, prisma),
     upsert,
     findMany,
     $transaction,
     gj,
     wt,
+    jk,
   };
 }
 
@@ -67,6 +71,7 @@ describe('JobsService', () => {
     const { service, upsert } = build(
       { jobs: [gjRaw], totalPages: 3 },
       { jobs: [wtRaw], totalPages: 5 },
+      { jobs: [], totalPages: 1 },
     );
     await service.getJobsPage(1);
     expect(upsert).toHaveBeenCalledTimes(1);
@@ -82,6 +87,7 @@ describe('JobsService', () => {
     const { service, upsert } = build(
       { jobs: [gjRaw], totalPages: 3 },
       { jobs: [otherWt], totalPages: 5 },
+      { jobs: [], totalPages: 1 },
     );
     await service.getJobsPage(1);
     expect(upsert).toHaveBeenCalledTimes(2);
@@ -91,6 +97,7 @@ describe('JobsService', () => {
     const { service } = build(
       { jobs: [gjRaw], totalPages: 3 },
       { jobs: [wtRaw], totalPages: 7 },
+      { jobs: [], totalPages: 1 },
     );
     const res = await service.getJobsPage(1);
     expect(res.totalPages).toBe(7);
@@ -101,6 +108,7 @@ describe('JobsService', () => {
     const { service, upsert } = build(
       new Error('gamejob down'),
       { jobs: [wtRaw], totalPages: 5 },
+      { jobs: [], totalPages: 1 },
     );
     const res = await service.getJobsPage(1);
     expect(res.failedSources).toEqual(['gamejob']);
@@ -111,7 +119,11 @@ describe('JobsService', () => {
   });
 
   it('모든 소스 실패 시 502 throw', async () => {
-    const { service } = build(new Error('a'), new Error('b'));
+    const { service } = build(
+      new Error('a'),
+      new Error('b'),
+      new Error('c'),
+    );
     await expect(service.getJobsPage(1)).rejects.toThrow();
   });
 
@@ -119,9 +131,33 @@ describe('JobsService', () => {
     const { service, upsert } = build(
       { jobs: [gjRaw], totalPages: 1 },
       { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
     );
     const res = await service.getJobsPage(1);
     expect(res.failedSources).toBeUndefined();
     expect(upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('잡코리아 결과도 라우팅에 합류한다', async () => {
+    const jkRaw: RawJob = {
+      source: 'jobkorea',
+      sourceId: '49228661',
+      company: '잡코리아테스트',
+      companyUrl: '',
+      title: '캐릭터 원화 디자이너',
+      detailUrl: 'https://www.jobkorea.co.kr/Recruit/GI_Read/49228661',
+      deadline: '상시',
+      registeredAtText: '',
+      tags: ['서울'],
+    };
+    const { service, upsert } = build(
+      { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
+      { jobs: [jkRaw], totalPages: 5 },
+    );
+    await service.getJobsPage(1);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0][0].create.source).toBe('jobkorea');
+    expect(upsert.mock.calls[0][0].where).toEqual({ id: 'jobkorea:49228661' });
   });
 });
