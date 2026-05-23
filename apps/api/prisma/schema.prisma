@@ -8,6 +8,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Job {
@@ -55,4 +56,19 @@ model GameImage {
   fetchedAt  DateTime @default(now()) @db.Timestamptz(3)
 
   @@map("game_images")
+}
+
+// 나무위키 게임 페이지 대표 이미지 캐시 — `apps/crawler`가 cron으로 채운다.
+// 키는 정규화된 게임명(공백/대소문자 그대로, '게임' suffix 없는 원형). api는 read-only.
+// status:
+//   'found'      — imageUrl 채워짐
+//   'not_found'  — 페이지는 있는데 대표 이미지 추출 실패 또는 페이지 자체 없음
+//   'blocked'    — 차단/봇 감지 (다음 크론에서 재시도)
+model NamuwikiImage {
+  gameName  String   @id
+  imageUrl  String?
+  status    String
+  fetchedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("namuwiki_images")
 }
