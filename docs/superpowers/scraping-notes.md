@@ -210,3 +210,31 @@
 - **Phase 2:** 잡코리아/사람인/인크루트 (Cloudflare 차단 시 Browserless 도입)
 - **Phase 3:** GameForPeople/korea-game-career-site 메타-소스 + 자사 ATS(Greenhouse/Lever/Greeting)
 - 웹 빌드: 사용자의 `JobImageCarousel` 모달 탭 분리 WIP 때문에 현재 깨져 있음 (Phase 1 작업과 무관 — 그쪽 진행 중인 별도 브랜치/작업에서 정리).
+
+## 잡코리아 (Jobkorea) — 2026-05-23
+
+- 진입: `GET https://www.jobkorea.co.kr/Search/?stext=게임+원화&tabType=recruit&Page_No=<N>`
+- 응답: Next.js 13 App Router (RSC) SSR HTML, ~400KB, 페이지당 25 CardJob.
+- Cloudflare 차단 없음 (Mozilla/5.0 UA로 200 응답).
+- 셀렉터:
+  - 카드: `div[data-sentry-component="CardJob"]`
+  - 상세 URL: `a[data-sentry-component="CompanyLogo"]` href (예: `/Recruit/GI_Read/<recno>?Oem_Code=C1`)
+  - sourceId: `/GI_Read/(\d+)/` 추출
+  - 제목: `a[data-sentry-component="Title"] span` 첫 텍스트
+  - 회사명: Title/CompanyLogo가 아닌 anchor의 `span.truncate` 텍스트
+  - 태그: `div[data-sentry-component="GrayChip"]` (지역, 경력, 고용형태)
+- 페이지네이션: `div[data-sentry-component="Pagination"] a[href*="Page_No="]` 중 최대값.
+- 검색 결과는 관련성 정렬이라 비-아트 직군도 섞임 → Wanted와 동일 `ART_KEYWORD_REGEX` client-side 필터 적용.
+- 픽스처: `apps/api/test/fixtures/jobkorea-search.html` (page 1, 25 raw → ~5 art-filtered).
+- 마감일/등록일은 카드에서 노출되지 않음 → deadline="상시", registeredAtText="" (parseRelativeTime이 now 반환).
+
+## Phase 2 다중 소스 통합 검증 (2026-05-23)
+
+`GET /api/jobs?page=1` 라이브 결과:
+- HTTP 200, 1.94s
+- jobs.length = 52 (gamejob:40 + wanted:1 + jobkorea:11)
+- failedSources = undefined — 3소스 모두 성공
+- totalPages = 8 (소스별 max)
+- jobkorea 추출 샘플: 게임원화 강사, 원화/연출, 글로벌 캐주얼 게임 원화, 배경 원화 팀장 — 전부 art 직무.
+- alternateSources 히트 0건: gamejob과 jobkorea가 비슷한 회사(아트트리)를 동시 노출하지만 정규화된 제목이 충분히 달라 dedup 안 됨 — 실제 cross-site 중복은 같은 공고일 때만 발생. 정상 동작.
+
