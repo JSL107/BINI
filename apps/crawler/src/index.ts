@@ -32,6 +32,13 @@ interface GoogleResult {
   blocked: boolean;
 }
 
+async function loadBadImageUrls(db: Client): Promise<Set<string>> {
+  const rows = await db.query<{ imageUrl: string }>(
+    `SELECT DISTINCT "imageUrl" FROM bad_image_reports`,
+  );
+  return new Set(rows.rows.map((r) => r.imageUrl));
+}
+
 async function gatherQueries(db: Client): Promise<string[]> {
   const a = await db.query<{ q: string }>(`
     SELECT DISTINCT "imageQuery" AS q
@@ -72,6 +79,7 @@ async function gatherQueries(db: Client): Promise<string[]> {
 async function searchGoogle(
   context: BrowserContext,
   query: string,
+  blockedUrls: Set<string>,
 ): Promise<GoogleResult> {
   const page = await context.newPage();
   try {
@@ -91,7 +99,10 @@ async function searchGoogle(
     if (page.url().includes('/sorry/')) {
       return { imageUrl: null, blocked: true };
     }
-    const imgUrl = await page.evaluate(() => {
+    // 후보 array를 그대로 가져와서, 사용자 신고된 URL은 skip하고 첫 합격품을 채택.
+    // 단일 결과만 뽑을 때보다 자가학습 차단의 효과가 더 큼.
+    const candidates = await page.evaluate(() => {
+      const out: string[] = [];
       const cands = Array.from(document.querySelectorAll('img'));
       for (const img of cands) {
         const src = img.getAttribute('src') ?? img.getAttribute('data-src');
@@ -103,18 +114,22 @@ async function searchGoogle(
           src.startsWith('https://lh5.googleusercontent.com') ||
           src.startsWith('https://lh6.googleusercontent.com')
         ) {
-          return src;
+          out.push(src);
         }
       }
-      return null;
+      return out;
     });
-    return { imageUrl: imgUrl, blocked: false };
+    const accepted = candidates.find((u) => !blockedUrls.has(u)) ?? null;
+    return { imageUrl: accepted, blocked: false };
   } finally {
     await page.close().catch(() => undefined);
   }
 }
 
-async function searchNaver(query: string): Promise<string | null> {
+async function searchNaver(
+  query: string,
+  blockedUrls: Set<string>,
+): Promise<string | null> {
   // Static HTML scrape — Naver image search results expose hotlinkable URLs.
   const res = await fetch(
     'https://search.naver.com/search.naver?where=image&query=' +
@@ -130,16 +145,24 @@ async function searchNaver(query: string): Promise<string | null> {
   ).catch(() => null);
   if (!res || !res.ok) return null;
   const html = await res.text();
-  // The first plausible CDN image URL — Naver wraps results variably; cover common cases.
-  const m =
-    html.match(/"thumbUrl":"(https:[^"]+)"/) ??
-    html.match(/data-source="(https:[^"]+)"/) ??
-    html.match(/src="(https?:\/\/search\.pstatic\.net\/[^"]+)"/) ??
-    html.match(/src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp|gif))"/i);
-  if (!m) return null;
-  let url = m[1].replace(/\\\//g, '/');
-  if (url.startsWith('http://')) url = 'https://' + url.slice('http://'.length);
-  return url;
+  // 후보 패턴들을 모두 모아 차단 URL은 skip하고 첫 합격품을 채택.
+  // 네이버는 결과 wrapper가 들쭉날쭉해 4가지 패턴 다 시도한다 (모두 같은 결과 페이지 안).
+  const patterns = [
+    /"thumbUrl":"(https:[^"]+)"/g,
+    /data-source="(https:[^"]+)"/g,
+    /src="(https?:\/\/search\.pstatic\.net\/[^"]+)"/g,
+    /src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp|gif))"/gi,
+  ];
+  for (const re of patterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      let url = m[1].replace(/\\\//g, '/');
+      if (url.startsWith('http://')) url = 'https://' + url.slice('http://'.length);
+      if (blockedUrls.has(url)) continue;
+      return url;
+    }
+  }
+  return null;
 }
 
 async function upsert(
@@ -188,6 +211,10 @@ async function main() {
       return;
     }
 
+    // 사용자 신고된 URL — 새 후보 채택 시 skip해서 자가학습 차단 루프 완결.
+    const blockedUrls = await loadBadImageUrls(db);
+    console.log(`[plan] ${blockedUrls.size} URL(s) on report-bad blocklist`);
+
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({
       userAgent:
@@ -204,12 +231,12 @@ async function main() {
     for (let i = 0; i < queries.length; i++) {
       const q = queries[i];
       try {
-        const g = await searchGoogle(context, q);
+        const g = await searchGoogle(context, q, blockedUrls);
         if (g.blocked) {
           // Mark blocked; then try Naver.
           await upsert(db, q, 'google-crawler', null, 'blocked');
           blockedCount++;
-          const n = await searchNaver(q);
+          const n = await searchNaver(q, blockedUrls);
           if (n) {
             await upsert(db, q, 'naver', n, 'found');
             naverFoundCount++;
