@@ -238,3 +238,9 @@
 - jobkorea 추출 샘플: 게임원화 강사, 원화/연출, 글로벌 캐주얼 게임 원화, 배경 원화 팀장 — 전부 art 직무.
 - alternateSources 히트 0건: gamejob과 jobkorea가 비슷한 회사(아트트리)를 동시 노출하지만 정규화된 제목이 충분히 달라 dedup 안 됨 — 실제 cross-site 중복은 같은 공고일 때만 발생. 정상 동작.
 
+
+## Phase 1.5 결론: Wanted 카테고리 개선 불가 (2026-05-23)
+
+21개 다른 `category_tags` 값(517,643,644,650-653,660,670,680,690,873,916,959,1024-1026,1071,1635,1636)을 모두 probe한 결과 **전부 동일한 39건/1 art match 반환**. → chaos API의 `category_tags` 파라미터는 무시되고 있음. 인증된 API 또는 헤드리스 브라우저(Playwright)를 통한 Wanted UI 우회 없이는 추가 art 결과 확보 불가.
+
+→ Wanted는 현 "1건/페이지 best-effort" 상태 유지. 추가 소스(사람인 등)가 더 큰 ROI.
