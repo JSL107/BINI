@@ -1,6 +1,6 @@
 export type ImageQueryType = 'game' | 'company';
 export type ImageStatus = 'found' | 'not_found' | 'error';
-export type JobSource = 'gamejob' | 'wanted';
+export type JobSource = 'gamejob' | 'wanted' | 'jobkorea';
 
 export interface AlternateSource {
   source: JobSource;
