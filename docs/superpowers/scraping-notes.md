@@ -163,3 +163,31 @@
   미설정 → `import 'dotenv/config'` 추가, `dotenv`를 dependencies로 이동.
 - 주의: 한글 쿼리는 UTF-8 percent-encoding으로 보내야 함. 웹 클라이언트의
   `encodeURIComponent`가 이를 보장함.
+
+## 원티드 (Wanted) chaos API — 2026-05-23
+
+- 진입: `GET https://www.wanted.co.kr/api/v4/jobs?category_tags=959&country=kr&job_sort=job.latest_order&limit=40&offset=<N>`
+- 응답: JSON. 인증 불필요. 응답 크기 ~30-60KB.
+- 응답 형태: `{ data: WantedJob[], links: { next: string|null, prev: string|null } }`
+- 페이지네이션: `offset` 파라미터(0, 40, 80, ...). `links.next === null` 이면 마지막 페이지.
+- `WantedJob` 주요 필드:
+  - `id: number` — 공고 ID. detailUrl은 `https://www.wanted.co.kr/wd/<id>`.
+  - `position: string` — 공고 제목
+  - `company.name: string` — 회사명
+  - `company.id: number` — 회사 페이지는 `https://www.wanted.co.kr/company/<id>`
+  - `address.location: string` (예: "서울"), `address.district: string`
+  - `due_time: string | null` — 마감일(ISO) 또는 null(상시)
+  - `category_tags: { parent_id: number, id: number }[]`
+
+### ⚠️ 게임 원화 적합도 제약
+- `category_tags=959`는 "디자인" 일반 카테고리로, 게임 원화 공고는 페이지당 0~1건뿐.
+- 키워드 검색 엔드포인트(`/api/v4/search/jobs?query=...`)는 404.
+- 따라서 1차 구현은 **client-side 키워드 정규식**으로 게임 아트 공고만 추출하는
+  "best-effort 보조 소스" 위치. 매 페이지에서 게임잡 대비 매우 적은 수의 공고만 통과.
+- 필터 정규식 (parser에서 적용):
+  `/원화|일러스트|컨셉|배경원|캐릭터|2D 아트|3D 아트|애니메이터|game artist|concept art|아트디렉터|아트팀|일러스트레이터/i`
+- 향후 개선: Wanted 카테고리 메타를 더 조사해 게임 아트 전용 카테고리 ID 발견 시 교체.
+
+### 원티드 첫 공고 기대값 (Task 5 테스트 정답 — wanted-list.json, cat=959, art filter 적용 시)
+- sourceId: 363812 (예시 — 실제 픽스처에서 art 매칭 첫 건은 "2D 모션그래픽 디자이너 | 하이퍼앰코리아")
+  Note: 픽스처 캡처 시점에 따라 첫 매칭 ID·회사가 다를 수 있음. 파서 테스트는 `expect.objectContaining`로 회사·제목 패턴만 검증.
