@@ -3,6 +3,7 @@ import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { WantedScraperService } from '../scraper/wanted-scraper.service';
 import { JobkoreaScraperService } from '../scraper/jobkorea-scraper.service';
 import { SaraminScraperService } from '../scraper/saramin-scraper.service';
+import { IncruitScraperService } from '../scraper/incruit-scraper.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RawJob } from '../scraper/raw-job';
 
@@ -13,6 +14,7 @@ function build(
   wtResult: ScrapeOk | Error,
   jkResult: ScrapeOk | Error,
   srResult: ScrapeOk | Error,
+  inResult: ScrapeOk | Error,
 ) {
   const upsert = jest.fn().mockResolvedValue(undefined);
   const findMany = jest.fn().mockResolvedValue([]);
@@ -23,7 +25,7 @@ function build(
   } as unknown as PrismaService;
 
   const mkScraper = (
-    src: 'gamejob' | 'wanted' | 'jobkorea' | 'saramin',
+    src: 'gamejob' | 'wanted' | 'jobkorea' | 'saramin' | 'incruit',
     r: any,
   ) =>
     ({
@@ -37,8 +39,9 @@ function build(
   const wt = mkScraper('wanted', wtResult);
   const jk = mkScraper('jobkorea', jkResult);
   const sr = mkScraper('saramin', srResult);
+  const inc = mkScraper('incruit', inResult);
   return {
-    service: new JobsService(gj, wt, jk, sr, prisma),
+    service: new JobsService(gj, wt, jk, sr, inc, prisma),
     upsert,
     findMany,
     $transaction,
@@ -46,6 +49,7 @@ function build(
     wt,
     jk,
     sr,
+    inc,
   };
 }
 
@@ -80,6 +84,7 @@ describe('JobsService', () => {
       { jobs: [wtRaw], totalPages: 5 },
       { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
     );
     await service.getJobsPage(1);
     expect(upsert).toHaveBeenCalledTimes(1);
@@ -97,6 +102,7 @@ describe('JobsService', () => {
       { jobs: [otherWt], totalPages: 5 },
       { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
     );
     await service.getJobsPage(1);
     expect(upsert).toHaveBeenCalledTimes(2);
@@ -106,6 +112,7 @@ describe('JobsService', () => {
     const { service } = build(
       { jobs: [gjRaw], totalPages: 3 },
       { jobs: [wtRaw], totalPages: 7 },
+      { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
     );
@@ -118,6 +125,7 @@ describe('JobsService', () => {
     const { service, upsert } = build(
       new Error('gamejob down'),
       { jobs: [wtRaw], totalPages: 5 },
+      { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
     );
@@ -135,6 +143,7 @@ describe('JobsService', () => {
       new Error('b'),
       new Error('c'),
       new Error('d'),
+      new Error('e'),
     );
     await expect(service.getJobsPage(1)).rejects.toThrow();
   });
@@ -142,6 +151,7 @@ describe('JobsService', () => {
   it('성공한 소스가 0건이어도 failedSources는 비어 있다', async () => {
     const { service, upsert } = build(
       { jobs: [gjRaw], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
@@ -168,6 +178,7 @@ describe('JobsService', () => {
       { jobs: [], totalPages: 1 },
       { jobs: [jkRaw], totalPages: 5 },
       { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
     );
     await service.getJobsPage(1);
     expect(upsert).toHaveBeenCalledTimes(1);
@@ -192,10 +203,36 @@ describe('JobsService', () => {
       { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
       { jobs: [srRaw], totalPages: 2 },
+      { jobs: [], totalPages: 1 },
     );
     await service.getJobsPage(1);
     expect(upsert).toHaveBeenCalledTimes(1);
     expect(upsert.mock.calls[0][0].create.source).toBe('saramin');
     expect(upsert.mock.calls[0][0].where).toEqual({ id: 'saramin:53625619' });
+  });
+
+  it('인크루트 결과도 라우팅에 합류한다', async () => {
+    const inRaw: RawJob = {
+      source: 'incruit',
+      sourceId: '2605180002537',
+      company: '인크루트테스트',
+      companyUrl: '',
+      title: 'UI/UX 웹디자인 퍼블리셔 과정 교육생 모집',
+      detailUrl: 'https://job.incruit.com/jobdb_info/jobpost.asp?job=2605180002537',
+      deadline: '~06.26 (금)',
+      registeredAtText: '(4일전 수정)',
+      tags: ['부산 해운대구 외', '경력무관'],
+    };
+    const { service, upsert } = build(
+      { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
+      { jobs: [inRaw], totalPages: 2 },
+    );
+    await service.getJobsPage(1);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0][0].create.source).toBe('incruit');
+    expect(upsert.mock.calls[0][0].where).toEqual({ id: 'incruit:2605180002537' });
   });
 });
