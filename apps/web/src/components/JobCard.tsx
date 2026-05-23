@@ -6,17 +6,21 @@ const SOURCE_LABEL: Record<JobSource, string> = {
   gamejob: '게임잡',
   wanted: '원티드',
   jobkorea: '잡코리아',
+  saramin: '사람인',
 };
 
 const SOURCE_COLOR: Record<JobSource, string> = {
   gamejob: 'bg-blue-100 text-blue-700',
   wanted: 'bg-purple-100 text-purple-700',
   jobkorea: 'bg-green-100 text-green-700',
+  saramin: 'bg-amber-100 text-amber-700',
 };
 
 export function JobCard({ job }: { job: Job }) {
   return (
-    <article className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+    <article
+      className={`overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm ${job.expired ? 'opacity-60' : ''}`}
+    >
       <JobImageCarousel
         jobId={job.id}
         fallbackQuery={job.imageQuery}
@@ -24,7 +28,7 @@ export function JobCard({ job }: { job: Job }) {
         alt={job.title}
       />
       <div className="space-y-2 p-4">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CompanyAvatar logoUrl={job.companyLogoUrl} name={job.company} />
           <span
             className={`rounded px-1.5 py-0.5 text-xs font-medium ${SOURCE_COLOR[job.source]}`}
@@ -34,6 +38,11 @@ export function JobCard({ job }: { job: Job }) {
               <span className="ml-1 opacity-70">+{job.alternateSources.length}</span>
             )}
           </span>
+          {job.expired && (
+            <span className="rounded bg-gray-200 px-1.5 py-0.5 text-xs font-medium text-gray-700">
+              마감
+            </span>
+          )}
           <p className="text-sm text-gray-500">{job.company}</p>
         </div>
         <a

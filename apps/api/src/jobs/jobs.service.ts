@@ -115,8 +115,15 @@ export class JobsService {
 }
 
 function isJobSource(s: string): s is JobSource {
-  return s === 'gamejob' || s === 'wanted' || s === 'jobkorea';
+  return (
+    s === 'gamejob' ||
+    s === 'wanted' ||
+    s === 'jobkorea' ||
+    s === 'saramin'
+  );
 }
+
+const EXPIRY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 function toJobDto(
   row: {
@@ -125,6 +132,7 @@ function toJobDto(
     tags: string[]; gameTitle: string | null; imageQuery: string;
     imageQueryType: string;
     companyLogoUrl: string | null; companyPhotos: string[]; representativeGames: string[];
+    lastSeenAt?: Date | null; expiredAt?: Date | null;
   },
   alternateSources: DedupedJob['alternateSources'],
 ): Job {
@@ -148,5 +156,15 @@ function toJobDto(
     companyLogoUrl: row.companyLogoUrl,
     companyPhotos: row.companyPhotos,
     representativeGames: row.representativeGames,
+    expired: computeExpired(row.expiredAt ?? null, row.lastSeenAt ?? null),
   };
+}
+
+function computeExpired(
+  expiredAt: Date | null,
+  lastSeenAt: Date | null,
+): boolean {
+  if (expiredAt) return true;
+  if (!lastSeenAt) return false;
+  return Date.now() - lastSeenAt.getTime() > EXPIRY_WINDOW_MS;
 }

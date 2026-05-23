@@ -33,7 +33,11 @@ model Job {
   representativeGames String[] @default([])
   detailScrapedAt     DateTime? @db.Timestamptz(3)
 
+  // 만료 플래그 — cron이 lastSeenAt + 7d 경과 시 채움. 응답엔 expired:boolean 으로 노출.
+  expiredAt           DateTime? @db.Timestamptz(3)
+
   @@index([registeredAt])
+  @@index([expiredAt])
   @@index([source])
   @@map("jobs")
 }

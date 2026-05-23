@@ -28,8 +28,13 @@ jobs:
       - name: Install Chromium
         run: pnpm --filter crawler exec playwright install --with-deps chromium
 
-      - name: Run crawler
+      - name: Run image crawler
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           CRAWLER_MAX_QUERIES: '500'
         run: pnpm --filter crawler crawl
+
+      - name: Mark expired jobs
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: pnpm --filter crawler expire
