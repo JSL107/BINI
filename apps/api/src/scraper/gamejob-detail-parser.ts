@@ -49,15 +49,20 @@ export function parseJobDetail(html: string): JobDetailExtract {
     .find((s) => s.includes(LOGO_PATH_HINT));
   const companyLogoUrl = abs(logoSrc);
 
-  // Company photos
+  // Company photos — GameJob's detail page slideshow caps at 4. Enforce here so
+  // a malformed company page (uploaded extras, lazy duplicates) doesn't bloat
+  // the modal's "회사 사진" tab. Document order preserved.
+  const COMPANY_PHOTO_MAX = 4;
   const companyPhotos: string[] = [];
   const seen = new Set<string>();
   $('img').each((_, el) => {
+    if (companyPhotos.length >= COMPANY_PHOTO_MAX) return false;
     const url = abs($(el).attr('src'));
     if (url && url.includes(PHOTO_PATH_HINT) && !seen.has(url)) {
       seen.add(url);
       companyPhotos.push(url);
     }
+    return undefined;
   });
 
   // 대표게임 — labelled by <dt class="recruit-data-title">대표게임</dt>,

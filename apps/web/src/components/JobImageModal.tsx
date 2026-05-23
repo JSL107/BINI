@@ -190,14 +190,15 @@ export function JobImageModal({
           </button>
         </div>
 
-        {/* Image area */}
-        <div className="relative">
+        {/* Image area — fixed letterbox frame keeps all slides visually uniform
+            regardless of source aspect ratio. */}
+        <div className="relative flex aspect-[16/9] w-[80vw] max-w-5xl items-center justify-center rounded bg-black/85 shadow-xl">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             key={url}
             src={url}
             alt={alt}
-            className="max-h-[80vh] max-w-full rounded object-contain shadow-xl"
+            className="max-h-full max-w-full object-contain"
             onError={() => {
               if (urls.length <= 1) onCloseRef.current();
               else setIndex((i) => (i + 1) % urls.length);
@@ -234,6 +235,15 @@ export function JobImageModal({
               </span>
             </>
           )}
+          {/* "원본 새 창" — 모달 이미지 클릭 affordance가 없다는 피드백 반영. 명시적 링크로 노출. */}
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded bg-white/85 px-2 py-1 text-xs font-medium text-gray-700 shadow hover:bg-white"
+          >
+            원본 새 창에서 보기 ↗
+          </a>
         </div>
       </div>
     </div>
