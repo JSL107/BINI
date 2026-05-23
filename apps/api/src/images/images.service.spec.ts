@@ -51,7 +51,7 @@ describe('ImagesService', () => {
     const { service, upsert, search } = build();
     search.mockResolvedValue({ imageUrl: 'https://img/new.jpg', status: 'found' });
     const result = await service.resolve('블루아카이브 게임', 'game');
-    expect(search).toHaveBeenCalledWith('블루아카이브 게임');
+    expect(search).toHaveBeenCalledWith('블루아카이브 게임', undefined);
     expect(upsert).toHaveBeenCalledTimes(1);
     expect(result.imageUrl).toBe('https://img/new.jpg');
   });
