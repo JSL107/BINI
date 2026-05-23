@@ -160,15 +160,27 @@ export class JobsCronService {
    * 사용자 응답 경로. DB만 조회한다 — 외부 스크래퍼 호출 없음.
    * expired 잡도 결과에 포함하되 expired:true 플래그로 노출(프론트가 회색 처리 결정).
    * alternateSources는 dedup 시점 메모리에서만 합성되는 정보라 빈 배열로 둔다.
+   * search가 주어지면 title/company의 부분 일치(대소문자 무시)로 필터링한다.
    */
   async getJobsFromDb(
     page: number,
     perPage: number = DEFAULT_PER_PAGE,
+    search?: string,
   ): Promise<JobsResponse> {
+    const q = (search ?? '').trim();
+    const where = q
+      ? {
+          OR: [
+            { title: { contains: q, mode: 'insensitive' as const } },
+            { company: { contains: q, mode: 'insensitive' as const } },
+          ],
+        }
+      : undefined;
     const skip = (page - 1) * perPage;
     const [total, rows] = await this.prisma.$transaction([
-      this.prisma.job.count(),
+      this.prisma.job.count({ where }),
       this.prisma.job.findMany({
+        where,
         orderBy: [{ registeredAt: 'desc' }, { id: 'desc' }],
         skip,
         take: perPage,

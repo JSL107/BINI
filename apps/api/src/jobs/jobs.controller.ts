@@ -17,12 +17,18 @@ export class JobsController {
    * 상한 MAX_PAGE로 클램프한다. 배열로 들어오면 첫 값을 사용한다.
    */
   @Get()
-  async getJobs(@Query('page') page?: string | string[]): Promise<JobsResponse> {
+  async getJobs(
+    @Query('page') page?: string | string[],
+    @Query('q') q?: string | string[],
+  ): Promise<JobsResponse> {
     const rawValue = Array.isArray(page) ? page[0] : page;
     const raw = (rawValue ?? '').trim();
     const parsed = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
     const pageNum =
       Number.isNaN(parsed) || parsed < 1 ? 1 : Math.min(parsed, MAX_PAGE);
-    return this.jobsCron.getJobsFromDb(pageNum);
+    // 검색어: 첫 값만 사용 + 200자 클램프(악의적으로 큰 LIKE 패턴 방지)
+    const qValue = Array.isArray(q) ? q[0] : q;
+    const search = (qValue ?? '').trim().slice(0, 200);
+    return this.jobsCron.getJobsFromDb(pageNum, undefined, search || undefined);
   }
 }

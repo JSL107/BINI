@@ -8,8 +8,13 @@ import type {
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api';
 
-export async function fetchJobs(page: number): Promise<JobsResponse> {
-  const res = await fetch(`${BASE}/jobs?page=${page}`, { cache: 'no-store' });
+export async function fetchJobs(
+  page: number,
+  search?: string,
+): Promise<JobsResponse> {
+  const params = new URLSearchParams({ page: String(page) });
+  if (search) params.set('q', search);
+  const res = await fetch(`${BASE}/jobs?${params.toString()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`공고 목록 요청 실패: HTTP ${res.status}`);
   return res.json();
 }

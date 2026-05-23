@@ -1,11 +1,25 @@
 import Link from 'next/link';
 
-export function Pagination({ page, totalPages }: { page: number; totalPages: number }) {
+function buildHref(page: number, search?: string): string {
+  const params = new URLSearchParams({ page: String(page) });
+  if (search) params.set('q', search);
+  return `/?${params.toString()}`;
+}
+
+export function Pagination({
+  page,
+  totalPages,
+  search,
+}: {
+  page: number;
+  totalPages: number;
+  search?: string;
+}) {
   return (
     <nav className="flex items-center justify-center gap-4 py-6">
       {page > 1 && (
         <Link
-          href={`/?page=${page - 1}`}
+          href={buildHref(page - 1, search)}
           className="rounded border px-3 py-1 hover:bg-gray-50"
         >
           이전
@@ -16,7 +30,7 @@ export function Pagination({ page, totalPages }: { page: number; totalPages: num
       </span>
       {page < totalPages && (
         <Link
-          href={`/?page=${page + 1}`}
+          href={buildHref(page + 1, search)}
           className="rounded border px-3 py-1 hover:bg-gray-50"
         >
           다음

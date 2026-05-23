@@ -23,4 +23,16 @@ describe('Pagination', () => {
     render(<Pagination page={3} totalPages={5} />);
     expect(screen.getByText('3 / 5')).toBeInTheDocument();
   });
+
+  it('search가 주어지면 페이지 링크에 q 파라미터를 보존한다', () => {
+    render(<Pagination page={2} totalPages={5} search="원화" />);
+    expect(screen.getByRole('link', { name: '이전' })).toHaveAttribute(
+      'href',
+      '/?page=1&q=%EC%9B%90%ED%99%94',
+    );
+    expect(screen.getByRole('link', { name: '다음' })).toHaveAttribute(
+      'href',
+      '/?page=3&q=%EC%9B%90%ED%99%94',
+    );
+  });
 });
