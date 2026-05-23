@@ -34,6 +34,12 @@ jobs:
           CRAWLER_MAX_QUERIES: '500'
         run: pnpm --filter crawler crawl
 
+      - name: Run namuwiki crawler
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NAMUWIKI_MAX_TARGETS: '300'
+        run: pnpm --filter crawler crawl:namuwiki
+
       - name: Mark expired jobs
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

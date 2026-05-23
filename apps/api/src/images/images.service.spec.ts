@@ -11,7 +11,11 @@ describe('ImagesService', () => {
     const googleSearch = jest.fn().mockResolvedValue({ imageUrl: null, status: 'not_found' });
     const prisma = { gameImage: { findUnique, upsert } } as unknown as PrismaService;
     const provider = { search, source: 'naver' } as unknown as GameImageService;
-    const googleApi = { search: googleSearch, source: 'google-api' } as unknown as GoogleImageService;
+    const googleApi = {
+      search: googleSearch,
+      source: 'google-api',
+      isConfigured: () => false,
+    } as unknown as GoogleImageService;
     return {
       service: new ImagesService(provider, googleApi, prisma),
       findUnique,

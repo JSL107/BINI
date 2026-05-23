@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { JobImagesResponse } from '@bini/types';
+import { NamuwikiImageService } from '../image/namuwiki-image.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GamejobDetailService } from '../scraper/gamejob-detail.service';
 import { ImagesService } from './images.service';
@@ -20,6 +21,7 @@ export class JobImagesService {
     private readonly prisma: PrismaService,
     private readonly detail: GamejobDetailService,
     private readonly images: ImagesService,
+    private readonly namuwiki: NamuwikiImageService,
   ) {}
 
   resolve(rawId: string | undefined): Promise<JobImagesResponse> {
@@ -75,9 +77,10 @@ export class JobImagesService {
   /**
    * Carousel image priority:
    *   "게임 관련" 탭 (이 순서로 dedup하며 합침):
-   *     1) Naver image per 대표게임 (입력값 + URL 둘 다 dedup)
-   *     2) Naver image for the bracket-game (imageQueryType === 'game')
-   *     3) 공고 본문 iframe에서 추출한 이미지 (회사 직접 업로드 키아트/배너)
+   *     1) 공고 본문 iframe — 회사 직접 업로드 키아트/배너 (가장 정확)
+   *     2) 나무위키 대표 이미지 — `apps/crawler`가 cron으로 채우는 캐시 (위키 큐레이션)
+   *     3) Naver image per 대표게임 — 검색엔진, 노이즈 가능
+   *     4) Naver image for the bracket-game (imageQueryType === 'game')
    *   "회사 사진" 탭:
    *     - 게임잡 상세페이지의 CoImage/VIew 회사 사진
    *     - 단, 위 게임 탭에 이미 들어간 URL은 회사 탭에서 제거 (cross-tab URL dedup)
@@ -106,18 +109,25 @@ export class JobImagesService {
             .then((r) => r.imageUrl)
             .catch(() => null)
         : Promise.resolve(null);
+    // 나무위키는 read-only 캐시 조회 — 캐시 미스면 빈 배열 (크롤러가 다음 사이클에 채움).
+    const namuwikiPromise = this.namuwiki
+      .lookupMany(uniqueGames)
+      .catch(() => [] as string[]);
 
-    const [repResults, bracketUrl] = await Promise.all([
+    const [repResults, bracketUrl, namuwikiImages] = await Promise.all([
       Promise.all(repPromises),
       bracketPromise,
+      namuwikiPromise,
     ]);
 
     // 신뢰도 가중치 순서:
     //   1) bodyImages — 회사가 공고 본문에 직접 올린 이미지 (검색 매칭 모호성 없음, 가장 정확)
-    //   2) 대표게임 Naver — 회사가 명시한 게임명 직접 검색
-    //   3) 브래킷 게임 Naver — 제목 첫 대괄호 추출 검색 (코드네임이면 노이즈 가능)
+    //   2) 나무위키 대표게임 — 위키에서 큐레이션된 게임 대표 이미지 (검색엔진보다 신뢰)
+    //   3) 대표게임 Naver — 회사가 명시한 게임명 직접 검색
+    //   4) 브래킷 게임 Naver — 제목 첫 대괄호 추출 검색 (코드네임이면 노이즈 가능)
     const gameImages = dedup([
       ...job.bodyImages,
+      ...namuwikiImages,
       ...repResults.filter((u): u is string => !!u),
       ...(bracketUrl ? [bracketUrl] : []),
     ]);
