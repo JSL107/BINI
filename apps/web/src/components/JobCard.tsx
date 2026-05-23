@@ -7,6 +7,7 @@ const SOURCE_LABEL: Record<JobSource, string> = {
   wanted: '원티드',
   jobkorea: '잡코리아',
   saramin: '사람인',
+  incruit: '인크루트',
 };
 
 const SOURCE_COLOR: Record<JobSource, string> = {
@@ -14,6 +15,7 @@ const SOURCE_COLOR: Record<JobSource, string> = {
   wanted: 'bg-purple-100 text-purple-700',
   jobkorea: 'bg-green-100 text-green-700',
   saramin: 'bg-amber-100 text-amber-700',
+  incruit: 'bg-pink-100 text-pink-700',
 };
 
 export function JobCard({ job }: { job: Job }) {

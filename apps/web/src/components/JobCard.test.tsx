@@ -94,6 +94,12 @@ describe('JobCard', () => {
       expect(screen.getByText(/사람인/i)).toBeInTheDocument();
     });
 
+    it('renders the incruit source label', () => {
+      const job: Job = { ...baseJob, source: 'incruit' as const };
+      render(<JobCard job={job} />);
+      expect(screen.getByText(/인크루트/i)).toBeInTheDocument();
+    });
+
     it('renders +N alternateSources count when present', () => {
       const job: Job = {
         ...baseJob,
