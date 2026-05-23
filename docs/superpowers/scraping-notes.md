@@ -271,3 +271,13 @@
   - "카발세계관 3D 애니메이터" — jobkorea + saramin + incruit 3소스 매칭, primary=jobkorea
   - "트리노드 AX 인턴 채용공고" — gamejob + saramin 매칭, primary=gamejob
 
+## Phase 4: GitHub korea-game-career-site 메타-소스 (2026-05-23)
+
+- 엔드포인트: `GET /api/companies/career-sites`
+- 소스: GameForPeople/korea-game-career-site README.md
+- 24h 인메모리 캐시 + 1h Next.js ISR (`revalidate: 3600`)
+- 분류: company (~35) / jobBoard (~6) / companyInfo (~3)
+- 웹 라우트: `/companies` — 카테고리별 그리드 카드 렌더 + 새 창 링크
+- 홈에서 nav 링크로 진입 가능
+- 라이브 검증 (2026-05-23): total=44 (company=35, jobBoard=6, companyInfo=3), first="게임빌 - 컴투스"
+
