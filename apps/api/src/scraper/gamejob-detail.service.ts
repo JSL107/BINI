@@ -5,6 +5,7 @@ const EMPTY: JobDetailExtract = {
   companyLogoUrl: null,
   companyPhotos: [],
   representativeGames: [],
+  bodyImages: [],
 };
 
 const FETCH_TIMEOUT_MS = 8_000;

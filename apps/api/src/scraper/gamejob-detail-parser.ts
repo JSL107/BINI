@@ -16,6 +16,11 @@ export interface JobDetailExtract {
   companyPhotos: string[];
   /** 대표게임 entries (split by ',' and trimmed). Empty when GameJob lists "-" or nothing. */
   representativeGames: string[];
+  /**
+   * 공고 본문 iframe에서 추출한 광고/배너 이미지들. 회사가 직접 업로드한 키아트인 경우가 많음.
+   * 카루셀/모달의 "게임 관련" 탭에 병합되어 노출된다. URL 기준 dedup, 문서 순서 보존.
+   */
+  bodyImages: string[];
 }
 
 /**
@@ -80,5 +85,40 @@ export function parseJobDetail(html: string): JobDetailExtract {
     }
   });
 
-  return { companyLogoUrl, companyPhotos, representativeGames };
+  return { companyLogoUrl, companyPhotos, representativeGames, bodyImages: [] };
+}
+
+/**
+ * GameJob 공고 본문은 `/Recruit/GI_Read_Comt_Ifrm?gno=<id>` iframe으로 로드된다.
+ * 이 iframe HTML에서 회사가 직접 업로드한 광고 이미지를 추출한다.
+ *
+ * 필터:
+ *   - HTTPS만.
+ *   - 트래커/GTM/analytics 픽셀 제외.
+ *   - 일반 이미지 확장자(.jpg/.jpeg/.png/.webp/.gif) 또는 GameJob의 NoticeImg/CoImage 경로.
+ *
+ * iframe이 비어있거나(많은 잡이 그렇다) 매칭 없으면 빈 배열.
+ */
+export function parseJobBodyImages(html: string): string[] {
+  const $ = cheerio.load(html);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  $('img').each((_, el) => {
+    const url = abs($(el).attr('src'));
+    if (!url) return;
+    // Skip analytics/tracker pixels.
+    if (/(googletagmanager|google-analytics|doubleclick|gtag|gtm\.|criteo)/i.test(url)) {
+      return;
+    }
+    const looksLikeImage =
+      /\.(jpg|jpeg|png|webp|gif)(\?|#|$)/i.test(url) ||
+      url.includes('NoticeImg') ||
+      url.includes('CoImage') ||
+      url.includes('job-post-images');
+    if (!looksLikeImage) return;
+    if (seen.has(url)) return;
+    seen.add(url);
+    out.push(url);
+  });
+  return out;
 }

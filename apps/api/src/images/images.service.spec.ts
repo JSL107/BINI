@@ -1,5 +1,6 @@
 import { ImagesService } from './images.service';
 import { GameImageService } from '../image/game-image.service';
+import { GoogleImageService } from '../image/google-image.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('ImagesService', () => {
@@ -7,9 +8,17 @@ describe('ImagesService', () => {
     const findUnique = jest.fn().mockResolvedValue(null);
     const upsert = jest.fn().mockResolvedValue(undefined);
     const search = jest.fn();
+    const googleSearch = jest.fn().mockResolvedValue({ imageUrl: null, status: 'not_found' });
     const prisma = { gameImage: { findUnique, upsert } } as unknown as PrismaService;
     const provider = { search, source: 'naver' } as unknown as GameImageService;
-    return { service: new ImagesService(provider, prisma), findUnique, upsert, search };
+    const googleApi = { search: googleSearch, source: 'google-api' } as unknown as GoogleImageService;
+    return {
+      service: new ImagesService(provider, googleApi, prisma),
+      findUnique,
+      upsert,
+      search,
+      googleSearch,
+    };
   }
 
   it('DB 캐시 히트 시 스크래핑하지 않는다', async () => {

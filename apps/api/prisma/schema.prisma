@@ -31,6 +31,8 @@ model Job {
   companyLogoUrl      String?
   companyPhotos       String[] @default([])
   representativeGames String[] @default([])
+  // 공고 본문 iframe에서 회사가 직접 업로드한 광고/배너 이미지 (게임 키아트인 경우 많음)
+  bodyImages          String[] @default([])
   detailScrapedAt     DateTime? @db.Timestamptz(3)
 
   // 만료 플래그 — cron이 lastSeenAt + 7d 경과 시 채움. 응답엔 expired:boolean 으로 노출.

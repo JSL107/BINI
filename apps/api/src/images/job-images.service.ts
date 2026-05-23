@@ -14,12 +14,6 @@ const EMPTY: JobImagesResponse = {
 
 @Injectable()
 export class JobImagesService {
-  /**
-   * In-flight resolution dedup. When 40 cards on the same page each call
-   * `/api/job-images?id=` simultaneously, we share the single in-flight
-   * Promise instead of triggering N concurrent detail scrapes (which would
-   * thunder GameJob, risk 403s, and permanently poison the cache).
-   */
   private readonly inflight = new Map<string, Promise<JobImagesResponse>>();
 
   constructor(
@@ -47,7 +41,6 @@ export class JobImagesService {
     if (!job) return EMPTY;
 
     // Lazy enrichment only for sources we can actually scrape (currently gamejob).
-    // Other sources keep detailScrapedAt null until a source-specific enricher exists.
     if (!job.detailScrapedAt && job.source === 'gamejob') {
       const detail = await this.detail.fetchDetail(job.sourceId || id);
       job = await this.prisma.job.update({
@@ -56,6 +49,7 @@ export class JobImagesService {
           companyLogoUrl: detail.companyLogoUrl,
           companyPhotos: detail.companyPhotos,
           representativeGames: detail.representativeGames,
+          bodyImages: detail.bodyImages,
           detailScrapedAt: new Date(),
         },
       });
@@ -66,6 +60,7 @@ export class JobImagesService {
       imageQueryType: job.imageQueryType,
       representativeGames: job.representativeGames,
       companyPhotos: job.companyPhotos,
+      bodyImages: job.bodyImages,
     });
 
     return {
@@ -79,18 +74,23 @@ export class JobImagesService {
 
   /**
    * Carousel image priority:
-   *   1) Naver image per 대표게임 (dedup입력값 + 결과 URL 둘 다 dedup)
-   *   2) Naver image for the bracket-game (only when imageQueryType === 'game')
-   *   3) GameJob company photos
-   * (1) and (2) run in parallel to minimize latency on cold loads.
+   *   "게임 관련" 탭 (이 순서로 dedup하며 합침):
+   *     1) Naver image per 대표게임 (입력값 + URL 둘 다 dedup)
+   *     2) Naver image for the bracket-game (imageQueryType === 'game')
+   *     3) 공고 본문 iframe에서 추출한 이미지 (회사 직접 업로드 키아트/배너)
+   *   "회사 사진" 탭:
+   *     - 게임잡 상세페이지의 CoImage/VIew 회사 사진
+   *     - 단, 위 게임 탭에 이미 들어간 URL은 회사 탭에서 제거 (cross-tab URL dedup)
+   * 카드 표면 카루셀: 두 탭을 그대로 합쳐 dedup (게임 우선).
    */
   private async combineImages(job: {
     imageQuery: string;
     imageQueryType: string;
     representativeGames: string[];
     companyPhotos: string[];
+    bodyImages: string[];
   }): Promise<{ gameImages: string[]; companyPhotos: string[]; images: string[] }> {
-    // Dedup query strings BEFORE hitting Naver (avoid wasted network round-trips).
+    // Dedup query strings BEFORE hitting Naver.
     const uniqueGames = Array.from(new Set(job.representativeGames));
 
     const repPromises = uniqueGames.map((name) =>
@@ -112,16 +112,21 @@ export class JobImagesService {
       bracketPromise,
     ]);
 
-    // "게임 관련" 탭용: 대표게임 네이버 + 브래킷 게임 네이버 (URL 기준 dedup)
+    // 신뢰도 가중치 순서:
+    //   1) bodyImages — 회사가 공고 본문에 직접 올린 이미지 (검색 매칭 모호성 없음, 가장 정확)
+    //   2) 대표게임 Naver — 회사가 명시한 게임명 직접 검색
+    //   3) 브래킷 게임 Naver — 제목 첫 대괄호 추출 검색 (코드네임이면 노이즈 가능)
     const gameImages = dedup([
+      ...job.bodyImages,
       ...repResults.filter((u): u is string => !!u),
       ...(bracketUrl ? [bracketUrl] : []),
     ]);
 
-    // "회사" 탭용: 게임잡 상세페이지의 회사 사진 (이미 parser 단계에서 dedup됨)
-    const companyPhotos = job.companyPhotos;
+    // Cross-tab URL dedup: if a body image happened to also be in CoImage/VIew
+    // (rare but possible — same blob path), the game tab wins.
+    const gameSet = new Set(gameImages);
+    const companyPhotos = job.companyPhotos.filter((u) => !gameSet.has(u));
 
-    // 카드 표면 카루셀용: 두 그룹을 우선순위 순으로 합친 뒤 dedup (게임 우선)
     const images = dedup([...gameImages, ...companyPhotos]);
 
     return { gameImages, companyPhotos, images };

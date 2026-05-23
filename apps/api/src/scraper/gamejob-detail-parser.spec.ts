@@ -47,6 +47,7 @@ describe('parseJobDetail', () => {
       companyLogoUrl: null,
       companyPhotos: [],
       representativeGames: [],
+      bodyImages: [],
     });
   });
 });
