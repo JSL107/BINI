@@ -45,3 +45,30 @@ export async function getCareerSites(): Promise<CareerSitesResponse> {
   if (!res.ok) throw new Error(`Failed to fetch career sites: HTTP ${res.status}`);
   return res.json();
 }
+
+/**
+ * "이 이미지 잘못됐어요" 신고. fire-and-forget — 실패해도 클라이언트 상태는
+ * 이미 optimistic하게 제거된 상태라 UX 흐름엔 영향 없음. 네트워크 실패 로그만 남김.
+ */
+export async function reportBadImage(
+  imageUrl: string,
+  jobId?: string,
+  reason?: string,
+): Promise<void> {
+  try {
+    const res = await fetch(`${BASE}/job-images/report-bad`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageUrl, jobId, reason }),
+    });
+    if (!res.ok && process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.warn(`bad-image report HTTP ${res.status}`);
+    }
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.warn('bad-image report error', err);
+    }
+  }
+}

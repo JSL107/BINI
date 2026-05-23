@@ -14,6 +14,8 @@ export interface JobImageModalProps {
   initialUrl: string | null;
   alt: string;
   onClose: () => void;
+  /** "이 이미지 잘못됐어요" 클릭 시 부모에게 위임. 부모가 confirm + API 호출 + state 갱신. */
+  onReportBad?: (imageUrl: string) => void;
 }
 
 /**
@@ -35,6 +37,7 @@ export function JobImageModal({
   initialUrl,
   alt,
   onClose,
+  onReportBad,
 }: JobImageModalProps) {
   const initial = useMemo(() => {
     const inGame = initialUrl ? gameImages.indexOf(initialUrl) : -1;
@@ -272,6 +275,33 @@ export function JobImageModal({
           >
             원본 새 창에서 보기 ↗
           </a>
+          {onReportBad && (
+            <button
+              type="button"
+              aria-label="이 이미지가 공고와 안 맞음을 신고"
+              data-testid="report-bad-image-modal"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReportBad(url);
+              }}
+              className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded bg-white/85 px-2 py-1 text-xs font-medium text-gray-700 shadow hover:bg-white hover:text-red-600"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 21V4h12l-1.5 4L15 12H3" />
+                <line x1="3" y1="21" x2="3" y2="3" />
+              </svg>
+              잘못된 이미지 신고
+            </button>
+          )}
         </div>
       </div>
     </div>

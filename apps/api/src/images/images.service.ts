@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { GameImageResponse, ImageQueryType, ImageStatus } from '@bini/types';
 import { GameImageService } from '../image/game-image.service';
 import { GoogleImageService } from '../image/google-image.service';
-import type { ImageProvider, ImageResult } from '../image/image-provider';
+import type {
+  ImageProvider,
+  ImageResult,
+  SearchOptions,
+} from '../image/image-provider';
 import { PrismaService } from '../prisma/prisma.service';
 
 const STATUSES: ImageStatus[] = ['found', 'not_found', 'error', 'blocked'];
@@ -35,7 +39,11 @@ export class ImagesService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async resolve(query: string, queryType: ImageQueryType): Promise<GameImageResponse> {
+  async resolve(
+    query: string,
+    queryType: ImageQueryType,
+    options?: SearchOptions,
+  ): Promise<GameImageResponse> {
     if (query.length === 0) {
       return { query, imageUrl: null, status: 'not_found' };
     }
@@ -57,21 +65,24 @@ export class ImagesService {
       }
     }
 
-    const existing = this.inflight.get(query);
+    // 동시 요청 dedup 키에는 verifyText까지 포함 — 같은 query/다른 verify는 결과가 다를 수 있음.
+    const inflightKey = options?.verifyText ? `${query}::v=${options.verifyText}` : query;
+    const existing = this.inflight.get(inflightKey);
     if (existing) return existing;
 
-    const work = this.fetchAndCache(query, queryType);
-    this.inflight.set(query, work);
+    const work = this.fetchAndCache(query, queryType, options);
+    this.inflight.set(inflightKey, work);
     try {
       return await work;
     } finally {
-      this.inflight.delete(query);
+      this.inflight.delete(inflightKey);
     }
   }
 
   private async fetchAndCache(
     query: string,
     queryType: ImageQueryType,
+    options?: SearchOptions,
   ): Promise<GameImageResponse> {
     const chain: Array<{ provider: ImageProvider; active: boolean }> = [
       { provider: this.googleApi, active: this.googleApi.isConfigured() },
@@ -83,7 +94,7 @@ export class ImagesService {
 
     for (const { provider, active } of chain) {
       if (!active) continue;
-      result = await provider.search(query);
+      result = await provider.search(query, options);
       source = provider.source;
       if (result.imageUrl) break;
     }

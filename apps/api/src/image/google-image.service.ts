@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ImageProvider, ImageResult } from './image-provider';
+import { ImageProvider, ImageResult, SearchOptions } from './image-provider';
 import { createLimiter } from './limit';
 
 /**
@@ -26,7 +26,9 @@ export class GoogleImageService implements ImageProvider {
     return !!(process.env.GOOGLE_CSE_API_KEY && process.env.GOOGLE_CSE_ID);
   }
 
-  search(query: string): Promise<ImageResult> {
+  search(query: string, _options?: SearchOptions): Promise<ImageResult> {
+    // Google CSE는 출처 페이지 URL이 결과에 직접 포함되지 않아 별도 검증 안 함.
+    // (`searchType=image`는 image.link/displayLink만 노출 — context fetch가 추가 RT)
     return this.limit(() => this.doSearch(query));
   }
 
