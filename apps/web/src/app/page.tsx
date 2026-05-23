@@ -1,5 +1,5 @@
 import { fetchJobs } from '../lib/api';
-import { JobCard } from '../components/JobCard';
+import { JobsGridWithFilter } from '../components/JobsGridWithFilter';
 import { Pagination } from '../components/Pagination';
 
 export const dynamic = 'force-dynamic';
@@ -25,15 +25,11 @@ export default async function Home({
           회사 채용 페이지
         </a>
       </nav>
-      <h1 className="mb-6 text-2xl font-bold">게임잡 원화 채용공고</h1>
+      <h1 className="mb-6 text-2xl font-bold">게임 원화 채용공고</h1>
       {data.jobs.length === 0 ? (
         <p className="text-gray-500">공고가 없습니다.</p>
       ) : (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {data.jobs.map((job) => (
-            <JobCard key={job.id} job={job} />
-          ))}
-        </div>
+        <JobsGridWithFilter jobs={data.jobs} />
       )}
       <Pagination page={data.page} totalPages={data.totalPages} />
     </main>
