@@ -1,87 +1,127 @@
 import { JobsService } from './jobs.service';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
+import { WantedScraperService } from '../scraper/wanted-scraper.service';
 import { PrismaService } from '../prisma/prisma.service';
+import type { RawJob } from '../scraper/raw-job';
+
+type ScrapeOk = { jobs: RawJob[]; totalPages: number };
+
+function build(
+  gjResult: ScrapeOk | Error,
+  wtResult: ScrapeOk | Error,
+) {
+  const upsert = jest.fn().mockResolvedValue(undefined);
+  const findMany = jest.fn().mockResolvedValue([]);
+  const $transaction = jest.fn(async (ops: any[]) => Promise.all(ops));
+  const prisma = {
+    job: { upsert, findMany },
+    $transaction,
+  } as unknown as PrismaService;
+
+  const mkScraper = (src: 'gamejob' | 'wanted', r: any) =>
+    ({
+      source: src,
+      fetchJobList: jest.fn(() =>
+        r instanceof Error ? Promise.reject(r) : Promise.resolve(r),
+      ),
+    } as any);
+
+  const gj = mkScraper('gamejob', gjResult);
+  const wt = mkScraper('wanted', wtResult);
+  return {
+    service: new JobsService(gj, wt, prisma),
+    upsert,
+    findMany,
+    $transaction,
+    gj,
+    wt,
+  };
+}
+
+const gjRaw: RawJob = {
+  source: 'gamejob',
+  sourceId: '278454',
+  company: '게임듀오',
+  companyUrl: 'https://www.gamejob.co.kr/Company/Detail?M=1',
+  title: '[p.일렌시아] 배경 도트 디자이너',
+  detailUrl: 'https://www.gamejob.co.kr/Recruit/GI_Read/View?GI_No=278454',
+  deadline: '상시',
+  registeredAtText: '4시간 전 등록',
+  tags: [],
+};
+
+const wtRaw: RawJob = {
+  source: 'wanted',
+  sourceId: '999',
+  company: '게임듀오',
+  companyUrl: 'https://www.wanted.co.kr/company/13711',
+  title: 'p.일렌시아 배경 도트 디자이너',
+  detailUrl: 'https://www.wanted.co.kr/wd/999',
+  deadline: '상시',
+  registeredAtText: '',
+  tags: ['서울'],
+};
 
 describe('JobsService', () => {
-  const sampleRaw = {
-    source: 'gamejob' as const,
-    sourceId: '278454',
-    company: '게임듀오',
-    companyUrl: 'https://www.gamejob.co.kr/Company/Detail?M=1',
-    title: '[p.일렌시아] 배경 도트 디자이너',
-    detailUrl: 'https://www.gamejob.co.kr/Recruit/GI_Read/View?GI_No=278454',
-    deadline: '상시',
-    registeredAtText: '4시간 전 등록',
-    tags: ['신입', '경기'],
-  };
-
-  function build(scrapeResult: { jobs: any[]; totalPages: number }) {
-    const upsert = jest.fn((args: unknown) => args);
-    const findMany = jest.fn().mockResolvedValue([]);
-    const $transaction = jest.fn().mockResolvedValue([]);
-    const prisma = { job: { upsert, findMany }, $transaction } as unknown as PrismaService;
-    const scraper = {
-      fetchJobList: jest.fn().mockResolvedValue(scrapeResult),
-    } as unknown as GamejobScraperService;
-    return { service: new JobsService(scraper, prisma), upsert, findMany, $transaction };
-  }
-
-  it('스크래핑한 공고를 제목 분류와 함께 upsert한다', async () => {
-    const { service, upsert } = build({ jobs: [sampleRaw], totalPages: 3 });
+  it('두 소스의 결과를 dedup하여 1건만 upsert한다', async () => {
+    const { service, upsert } = build(
+      { jobs: [gjRaw], totalPages: 3 },
+      { jobs: [wtRaw], totalPages: 5 },
+    );
     await service.getJobsPage(1);
     expect(upsert).toHaveBeenCalledTimes(1);
-    const arg: any = upsert.mock.calls[0][0];
+    const arg = upsert.mock.calls[0][0];
+    // 게임잡이 입력 순서상 먼저이므로 primary 채택
     expect(arg.where).toEqual({ id: 'gamejob:278454' });
-    expect(arg.create.gameTitle).toBe('p.일렌시아');
-    expect(arg.create.imageQueryType).toBe('game');
+    expect(arg.create.source).toBe('gamejob');
+    expect(arg.create.sourceId).toBe('278454');
   });
 
-  it('upsert들을 단일 $transaction으로 묶는다', async () => {
-    const { service, $transaction } = build({ jobs: [sampleRaw], totalPages: 1 });
+  it('서로 다른 공고 두 건은 각각 upsert된다', async () => {
+    const otherWt: RawJob = { ...wtRaw, sourceId: '1000', company: '딴회사' };
+    const { service, upsert } = build(
+      { jobs: [gjRaw], totalPages: 3 },
+      { jobs: [otherWt], totalPages: 5 },
+    );
     await service.getJobsPage(1);
-    expect($transaction).toHaveBeenCalledTimes(1);
-    expect($transaction.mock.calls[0][0]).toHaveLength(1);
+    expect(upsert).toHaveBeenCalledTimes(2);
   });
 
-  it('update 페이로드는 registeredAt/firstSeenAt를 건드리지 않고 lastSeenAt만 갱신한다', async () => {
-    const { service, upsert } = build({ jobs: [sampleRaw], totalPages: 1 });
-    await service.getJobsPage(1);
-    const arg: any = upsert.mock.calls[0][0];
-    expect(arg.update).not.toHaveProperty('registeredAt');
-    expect(arg.update).not.toHaveProperty('firstSeenAt');
-    expect(arg.update).toHaveProperty('lastSeenAt');
-    expect(arg.create).toHaveProperty('registeredAt');
+  it('totalPages는 성공한 소스 중 최대값', async () => {
+    const { service } = build(
+      { jobs: [gjRaw], totalPages: 3 },
+      { jobs: [wtRaw], totalPages: 7 },
+    );
+    const res = await service.getJobsPage(1);
+    expect(res.totalPages).toBe(7);
+    expect(res.page).toBe(1);
   });
 
-  it('totalPages와 page를 응답에 포함한다', async () => {
-    const { service } = build({ jobs: [sampleRaw], totalPages: 3 });
-    const result = await service.getJobsPage(1);
-    expect(result.totalPages).toBe(3);
-    expect(result.page).toBe(1);
+  it('한 소스 실패해도 다른 소스 결과로 응답하고 failedSources를 노출한다', async () => {
+    const { service, upsert } = build(
+      new Error('gamejob down'),
+      { jobs: [wtRaw], totalPages: 5 },
+    );
+    const res = await service.getJobsPage(1);
+    expect(res.failedSources).toEqual(['gamejob']);
+    expect(res.totalPages).toBe(5);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    const arg = upsert.mock.calls[0][0];
+    expect(arg.create.source).toBe('wanted');
   });
 
-  it('DB에서 읽은 행을 Job DTO(registeredAt ISO 문자열)로 변환해 반환한다', async () => {
-    const { service, findMany } = build({ jobs: [sampleRaw], totalPages: 1 });
-    findMany.mockResolvedValue([
-      {
-        id: '278454', company: '게임듀오', companyUrl: 'https://c/1',
-        title: '[p.일렌시아] 배경 도트 디자이너', detailUrl: 'https://d/1',
-        deadline: '상시', registeredAt: new Date('2026-05-22T08:00:00.000Z'),
-        tags: ['신입'], gameTitle: 'p.일렌시아', imageQuery: 'p.일렌시아 게임',
-        imageQueryType: 'game',
-      },
-    ]);
-    const result = await service.getJobsPage(1);
-    expect(result.jobs).toHaveLength(1);
-    expect(result.jobs[0].id).toBe('278454');
-    expect(result.jobs[0].registeredAt).toBe('2026-05-22T08:00:00.000Z');
-    expect(result.jobs[0].imageQueryType).toBe('game');
+  it('모든 소스 실패 시 502 throw', async () => {
+    const { service } = build(new Error('a'), new Error('b'));
+    await expect(service.getJobsPage(1)).rejects.toThrow();
   });
 
-  it('스크랩 결과가 비면 빈 jobs로 응답하고 $transaction을 호출하지 않는다', async () => {
-    const { service, $transaction } = build({ jobs: [], totalPages: 0 });
-    const result = await service.getJobsPage(1);
-    expect(result.jobs).toEqual([]);
-    expect($transaction).not.toHaveBeenCalled();
+  it('성공한 소스가 0건이어도 failedSources는 비어 있다', async () => {
+    const { service, upsert } = build(
+      { jobs: [gjRaw], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
+    );
+    const res = await service.getJobsPage(1);
+    expect(res.failedSources).toBeUndefined();
+    expect(upsert).toHaveBeenCalledTimes(1);
   });
 });

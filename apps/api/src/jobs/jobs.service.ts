@@ -1,29 +1,67 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import type { Job, JobSource, JobsResponse } from '@bini/types';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
+import { WantedScraperService } from '../scraper/wanted-scraper.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseTitle } from '../title/title-parser';
 import { parseRelativeTime } from '../time/relative-time';
+import type { JobScraper } from '../scraper/scraper.interface';
+import type { RawJob } from '../scraper/raw-job';
+import { dedupeJobs, type DedupedJob } from './dedupe';
 
 @Injectable()
 export class JobsService {
   private readonly logger = new Logger(JobsService.name);
+  private readonly scrapers: JobScraper[];
 
   constructor(
-    private readonly scraper: GamejobScraperService,
+    gamejob: GamejobScraperService,
+    wanted: WantedScraperService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) {
+    this.scrapers = [gamejob, wanted];
+  }
 
-  /** 지정 페이지를 실시간 스크래핑 → DB에 단일 트랜잭션으로 upsert → 등록일순 반환. */
+  /**
+   * 등록된 모든 스크래퍼를 병렬 호출 → dedup → 단일 트랜잭션 upsert → 등록일순 반환.
+   * 일부 소스 실패는 failedSources 메타로 노출(부분 성공 허용),
+   * 전체 실패만 BadGateway로 fail-loud.
+   */
   async getJobsPage(page: number): Promise<JobsResponse> {
-    const { jobs: rawJobs, totalPages } = await this.scraper.fetchJobList(page);
+    const settled = await Promise.allSettled(
+      this.scrapers.map((s) => s.fetchJobList(page)),
+    );
+
+    const failedSources: JobSource[] = [];
+    const allRaw: RawJob[] = [];
+    let maxTotalPages = 0;
+
+    settled.forEach((r, i) => {
+      const src = this.scrapers[i].source;
+      if (r.status === 'fulfilled') {
+        allRaw.push(...r.value.jobs);
+        maxTotalPages = Math.max(maxTotalPages, r.value.totalPages);
+      } else {
+        this.logger.warn(`${src} fetch 실패: ${String(r.reason)}`);
+        failedSources.push(src);
+      }
+    });
+
+    if (failedSources.length === this.scrapers.length) {
+      throw new BadGatewayException(
+        `모든 소스 스크래핑 실패: ${failedSources.join(', ')}`,
+      );
+    }
+
+    const deduped = dedupeJobs(allRaw);
     const now = new Date();
 
-    const upserts = rawJobs.map((raw) => {
+    const upserts = deduped.map((raw) => {
       const parsed = parseTitle(raw.title, raw.company);
       const registeredAt = parseRelativeTime(raw.registeredAtText, now);
+      const id = `${raw.source}:${raw.sourceId}`;
       // registeredAt은 create에만 둔다 — 재스크래핑 시 상대시간 재계산값으로
-      // 최초 등록시각을 덮어쓰면 정렬이 흔들리고, 미해석 시 epoch로 가라앉는다.
+      // 최초 등록시각을 덮어쓰면 정렬이 흔들리기 때문.
       const common = {
         source: raw.source,
         sourceId: raw.sourceId,
@@ -37,7 +75,6 @@ export class JobsService {
         imageQuery: parsed.imageQuery,
         imageQueryType: parsed.imageQueryType,
       };
-      const id = `${raw.source}:${raw.sourceId}`;
       return this.prisma.job.upsert({
         where: { id },
         create: { id, ...common, registeredAt },
@@ -46,29 +83,45 @@ export class JobsService {
     });
 
     if (upserts.length > 0) {
-      // 단일 트랜잭션 — 원자성(부분 커밋 방지) + 라운드트립 일괄 처리.
       await this.prisma.$transaction(upserts);
     }
-    this.logger.log(`page ${page}: ${rawJobs.length}건 스크래핑·upsert 완료`);
+    this.logger.log(
+      `page ${page}: ${allRaw.length}건 raw → ${deduped.length}건 dedup → upsert 완료` +
+        (failedSources.length ? ` (failed: ${failedSources.join(',')})` : ''),
+    );
 
-    const ids = rawJobs.map((r) => `${r.source}:${r.sourceId}`);
+    const ids = deduped.map((d) => `${d.source}:${d.sourceId}`);
     const rows = await this.prisma.job.findMany({
       where: { id: { in: ids } },
-      // 같은 registeredAt 동률 시 안정 정렬을 위해 id를 보조 키로 사용.
       orderBy: [{ registeredAt: 'desc' }, { id: 'desc' }],
     });
 
-    return { page, totalPages, jobs: rows.map(toJobDto) };
+    // alternateSources를 sourceId 매칭으로 다시 attach (DB에는 저장 안 함, 응답 시점에 합성)
+    const altMap = new Map<string, DedupedJob['alternateSources']>();
+    for (const d of deduped) {
+      altMap.set(`${d.source}:${d.sourceId}`, d.alternateSources);
+    }
+
+    const jobs = rows.map((row) =>
+      toJobDto(row, altMap.get(row.id) ?? []),
+    );
+
+    const response: JobsResponse = { page, totalPages: maxTotalPages, jobs };
+    if (failedSources.length > 0) response.failedSources = failedSources;
+    return response;
   }
 }
 
-function toJobDto(row: {
-  id: string; source: string; company: string; companyUrl: string; title: string;
-  detailUrl: string; deadline: string; registeredAt: Date; tags: string[];
-  gameTitle: string | null; imageQuery: string; imageQueryType: string;
-  companyLogoUrl: string | null; companyPhotos: string[]; representativeGames: string[];
-}): Job {
-  // imageQueryType은 DB에 free-form String으로 저장되므로 런타임 가드.
+function toJobDto(
+  row: {
+    id: string; source: string; company: string; companyUrl: string;
+    title: string; detailUrl: string; deadline: string; registeredAt: Date;
+    tags: string[]; gameTitle: string | null; imageQuery: string;
+    imageQueryType: string;
+    companyLogoUrl: string | null; companyPhotos: string[]; representativeGames: string[];
+  },
+  alternateSources: DedupedJob['alternateSources'],
+): Job {
   const imageQueryType: Job['imageQueryType'] =
     row.imageQueryType === 'game' ? 'game' : 'company';
   const source: JobSource = row.source === 'wanted' ? 'wanted' : 'gamejob';
@@ -85,7 +138,7 @@ function toJobDto(row: {
     gameTitle: row.gameTitle,
     imageQuery: row.imageQuery,
     imageQueryType,
-    alternateSources: [],
+    alternateSources,
     companyLogoUrl: row.companyLogoUrl,
     companyPhotos: row.companyPhotos,
     representativeGames: row.representativeGames,
