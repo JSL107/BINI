@@ -12,21 +12,41 @@ const EMPTY: JobImagesResponse = {
 
 @Injectable()
 export class JobImagesService {
+  /**
+   * In-flight resolution dedup. When 40 cards on the same page each call
+   * `/api/job-images?id=` simultaneously, we share the single in-flight
+   * Promise instead of triggering N concurrent detail scrapes (which would
+   * thunder GameJob, risk 403s, and permanently poison the cache).
+   */
+  private readonly inflight = new Map<string, Promise<JobImagesResponse>>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly detail: GamejobDetailService,
     private readonly images: ImagesService,
   ) {}
 
-  async resolve(rawId: string | undefined): Promise<JobImagesResponse> {
+  resolve(rawId: string | undefined): Promise<JobImagesResponse> {
     const id = (rawId ?? '').trim();
-    if (!id) return EMPTY;
+    if (!id) return Promise.resolve(EMPTY);
 
+    const existing = this.inflight.get(id);
+    if (existing) return existing;
+
+    const promise = this.doResolve(id).finally(() => {
+      this.inflight.delete(id);
+    });
+    this.inflight.set(id, promise);
+    return promise;
+  }
+
+  private async doResolve(id: string): Promise<JobImagesResponse> {
     let job = await this.prisma.job.findUnique({ where: { id } });
     if (!job) return EMPTY;
 
-    // Lazy: scrape detail once and persist enrichment fields.
-    if (!job.detailScrapedAt) {
+    // Lazy enrichment only for sources we can actually scrape (currently gamejob).
+    // Other sources keep detailScrapedAt null until a source-specific enricher exists.
+    if (!job.detailScrapedAt && job.source === 'gamejob') {
       const detail = await this.detail.fetchDetail(job.sourceId || id);
       job = await this.prisma.job.update({
         where: { id },
@@ -54,11 +74,11 @@ export class JobImagesService {
   }
 
   /**
-   * 카루셀 노출용 이미지 우선순위:
-   *   1) 대표게임 각각의 네이버 이미지 (사용자가 가장 보고 싶은 "게임 아트")
-   *   2) 제목 대괄호가 게임명일 때의 네이버 이미지
-   *   3) GameJob 상세페이지의 회사 사진 (모달 확장 보기용)
-   * URL 기준 dedup, 순서 보존. 모든 검색은 best-effort — 실패해도 다른 소스로 계속.
+   * Carousel image priority:
+   *   1) Naver image per 대표게임 (dedup입력값 + 결과 URL 둘 다 dedup)
+   *   2) Naver image for the bracket-game (only when imageQueryType === 'game')
+   *   3) GameJob company photos
+   * (1) and (2) run in parallel to minimize latency on cold loads.
    */
   private async combineImages(job: {
     imageQuery: string;
@@ -66,30 +86,35 @@ export class JobImagesService {
     representativeGames: string[];
     companyPhotos: string[];
   }): Promise<string[]> {
-    const repPromises = job.representativeGames.map((name) =>
+    // Dedup query strings BEFORE hitting Naver (avoid wasted network round-trips).
+    const uniqueGames = Array.from(new Set(job.representativeGames));
+
+    const repPromises = uniqueGames.map((name) =>
       this.images
         .resolve(`${name} 게임`, 'game')
         .then((r) => r.imageUrl)
         .catch(() => null),
     );
-    const repResults = await Promise.all(repPromises);
+    const bracketPromise =
+      job.imageQueryType === 'game'
+        ? this.images
+            .resolve(job.imageQuery, 'game')
+            .then((r) => r.imageUrl)
+            .catch(() => null)
+        : Promise.resolve(null);
+
+    const [repResults, bracketUrl] = await Promise.all([
+      Promise.all(repPromises),
+      bracketPromise,
+    ]);
+
     const repUrls = repResults.filter((u): u is string => !!u);
-
-    let bracketUrl: string | null = null;
-    if (job.imageQueryType === 'game') {
-      try {
-        const r = await this.images.resolve(job.imageQuery, 'game');
-        bracketUrl = r.imageUrl;
-      } catch {
-        /* best-effort */
-      }
-    }
-
     const all = [
       ...repUrls,
       ...(bracketUrl ? [bracketUrl] : []),
       ...job.companyPhotos,
     ];
+
     const seen = new Set<string>();
     const out: string[] = [];
     for (const url of all) {

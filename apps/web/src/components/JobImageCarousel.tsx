@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ImageQueryType } from '@bini/types';
 import { fetchGameImage, fetchJobImages } from '../lib/api';
 import { JobImageModal } from './JobImageModal';
@@ -12,19 +12,19 @@ type State =
 
 export interface JobImageCarouselProps {
   jobId: string;
-  /** Naver 폴백 검색어 (게임잡 회사사진이 없을 때 사용). */
+  /** Naver 폴백 검색어 (게임잡 enrichment가 비어있을 때 단일 이미지 폴백). */
   fallbackQuery: string;
   fallbackType: ImageQueryType;
   alt: string;
 }
 
 /**
- * 카드 이미지 영역. 우선순위:
- *   1) GET /api/job-images?id= → 게임잡 상세페이지 회사사진(보통 4장).
- *   2) 위가 비어있으면 GET /api/game-image → 네이버 단일 이미지.
- *   3) 둘 다 실패하면 "이미지 없음" 플레이스홀더.
- * 다중 이미지면 prev/next 버튼 + 터치 스와이프 + "n/N" 인디케이터.
- * 개별 `<img>` onError가 발생하면 해당 URL을 제외하고 나머지로 계속 표시.
+ * 카드 이미지 영역. 우선순위(API에서 결정):
+ *   1) 대표게임 네이버 이미지 — "이 회사가 어떤 게임을 만드는가" 시각 정보 우선
+ *   2) 제목 대괄호 게임 네이버 이미지
+ *   3) GameJob 상세페이지의 회사 사진
+ * 비어 있으면 네이버 단일 이미지로 폴백, 그것도 없으면 "이미지 없음" 플레이스홀더.
+ * 이미지 클릭 → JobImageModal 확대 보기. ⛶ 매그니파이어 아이콘 + 호버 라벨로 affordance 표시.
  */
 export function JobImageCarousel({
   jobId,
@@ -83,6 +83,19 @@ export function JobImageCarousel({
     });
   };
 
+  // Stable ref so JobImageModal's keyboard effect does not re-run on parent renders.
+  const closeModal = useCallback(() => setModalOpen(false), []);
+  const openModal = useCallback(() => setModalOpen(true), []);
+  const onImageKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLImageElement>) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setModalOpen(true);
+      }
+    },
+    [],
+  );
+
   if (state.kind === 'loading') {
     return (
       <div
@@ -128,17 +141,34 @@ export function JobImageCarousel({
           src={url}
           alt={alt}
           title="클릭해서 크게 보기"
-          className="h-48 w-full cursor-zoom-in object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+          role="button"
+          tabIndex={0}
+          aria-label={`${alt} 크게 보기`}
+          className="h-48 w-full cursor-zoom-in object-cover transition-transform duration-200 group-hover:scale-[1.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           onError={() => dropFailed(url)}
-          onClick={() => setModalOpen(true)}
+          onClick={openModal}
+          onKeyDown={onImageKeyDown}
         />
-        {/* 클릭 affordance: 항상 보이는 매그니파이어 배지 + 호버 시 라벨 */}
+        {/* 클릭 affordance: 항상 보이는 매그니파이어 아이콘 + 호버 시 라벨 + cursor-zoom-in */}
         <span
           aria-hidden="true"
           data-testid="zoom-affordance"
-          className="pointer-events-none absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/80 text-base shadow ring-1 ring-black/5 opacity-80 transition-opacity group-hover:opacity-100"
+          className="pointer-events-none absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/85 text-gray-700 shadow ring-1 ring-black/5 opacity-90 transition-opacity group-hover:opacity-100"
         >
-          ⛶
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <line x1="11" y1="8" x2="11" y2="14" />
+            <line x1="8" y1="11" x2="14" y2="11" />
+          </svg>
         </span>
         <span
           aria-hidden="true"
@@ -184,7 +214,7 @@ export function JobImageCarousel({
         urls={urls}
         initialIndex={index}
         alt={alt}
-        onClose={() => setModalOpen(false)}
+        onClose={closeModal}
       />
     </>
   );

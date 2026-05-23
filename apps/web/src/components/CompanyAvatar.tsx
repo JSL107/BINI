@@ -9,7 +9,7 @@ export interface CompanyAvatarProps {
 
 function initialFor(name: string): string {
   // 첫 비-공백 문자. "㈜원더소프트" → "㈜", "ARTTREE" → "A".
-  const trimmed = (name ?? '').trim();
+  const trimmed = name.trim();
   return trimmed.length > 0 ? trimmed.charAt(0).toUpperCase() : '?';
 }
 

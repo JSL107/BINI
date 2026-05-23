@@ -2,6 +2,13 @@ import * as cheerio from 'cheerio';
 
 const BASE = 'https://www.gamejob.co.kr';
 
+// GameJob CDN URL paths. The photo path is intentionally `VIew` (capital V, lowercase
+// i, lowercase ew) on GameJob's side — likely a server-side typo, but stable. If they
+// ever normalize this casing, extraction silently returns 0 photos; the parser tests
+// against the captured fixture would catch the regression on the next CI run.
+const LOGO_PATH_HINT = 'CoImage/LogoView';
+const PHOTO_PATH_HINT = 'CoImage/VIew';
+
 export interface JobDetailExtract {
   /** Company logo URL from `CoImage/LogoView`, absolute https. Null if not found. */
   companyLogoUrl: string | null;
@@ -11,11 +18,19 @@ export interface JobDetailExtract {
   representativeGames: string[];
 }
 
+/**
+ * Normalize an HTML `src` attribute to an absolute https URL. GameJob's
+ * `CoImage/VIew?FN=…` URLs sometimes carry Windows-style backslashes inside
+ * the `FN=` query parameter, which are invalid per RFC 3986 and rejected by
+ * some HTTP clients/CDN edge nodes. Replace them with forward slashes.
+ */
 function abs(src: string | undefined | null): string | null {
   if (!src) return null;
-  if (src.startsWith('//')) return 'https:' + src;
-  if (src.startsWith('http')) return src;
-  if (src.startsWith('/')) return BASE + src;
+  const cleaned = src.replace(/\\/g, '/');
+  if (cleaned.startsWith('//')) return 'https:' + cleaned;
+  if (cleaned.startsWith('http://')) return 'https://' + cleaned.slice('http://'.length);
+  if (cleaned.startsWith('https://')) return cleaned;
+  if (cleaned.startsWith('/')) return BASE + cleaned;
   return null;
 }
 
@@ -31,7 +46,7 @@ export function parseJobDetail(html: string): JobDetailExtract {
   const logoSrc = $('img')
     .toArray()
     .map((el) => $(el).attr('src') ?? '')
-    .find((s) => s.includes('CoImage/LogoView'));
+    .find((s) => s.includes(LOGO_PATH_HINT));
   const companyLogoUrl = abs(logoSrc);
 
   // Company photos
@@ -39,7 +54,7 @@ export function parseJobDetail(html: string): JobDetailExtract {
   const seen = new Set<string>();
   $('img').each((_, el) => {
     const url = abs($(el).attr('src'));
-    if (url && url.includes('CoImage/VIew') && !seen.has(url)) {
+    if (url && url.includes(PHOTO_PATH_HINT) && !seen.has(url)) {
       seen.add(url);
       companyPhotos.push(url);
     }
