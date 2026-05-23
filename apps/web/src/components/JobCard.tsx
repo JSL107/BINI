@@ -5,11 +5,13 @@ import { CompanyAvatar } from './CompanyAvatar';
 const SOURCE_LABEL: Record<JobSource, string> = {
   gamejob: '게임잡',
   wanted: '원티드',
+  jobkorea: '잡코리아',
 };
 
 const SOURCE_COLOR: Record<JobSource, string> = {
   gamejob: 'bg-blue-100 text-blue-700',
   wanted: 'bg-purple-100 text-purple-700',
+  jobkorea: 'bg-green-100 text-green-700',
 };
 
 export function JobCard({ job }: { job: Job }) {

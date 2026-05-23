@@ -81,6 +81,12 @@ describe('JobCard', () => {
       expect(screen.getByText(/게임잡/i)).toBeInTheDocument();
     });
 
+    it('renders the jobkorea source label', () => {
+      const job: Job = { ...baseJob, source: 'jobkorea' as const };
+      render(<JobCard job={job} />);
+      expect(screen.getByText(/잡코리아/i)).toBeInTheDocument();
+    });
+
     it('renders +N alternateSources count when present', () => {
       const job: Job = {
         ...baseJob,
