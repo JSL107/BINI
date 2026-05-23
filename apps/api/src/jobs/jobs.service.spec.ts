@@ -2,6 +2,7 @@ import { JobsService } from './jobs.service';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { WantedScraperService } from '../scraper/wanted-scraper.service';
 import { JobkoreaScraperService } from '../scraper/jobkorea-scraper.service';
+import { SaraminScraperService } from '../scraper/saramin-scraper.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RawJob } from '../scraper/raw-job';
 
@@ -11,6 +12,7 @@ function build(
   gjResult: ScrapeOk | Error,
   wtResult: ScrapeOk | Error,
   jkResult: ScrapeOk | Error,
+  srResult: ScrapeOk | Error,
 ) {
   const upsert = jest.fn().mockResolvedValue(undefined);
   const findMany = jest.fn().mockResolvedValue([]);
@@ -20,7 +22,10 @@ function build(
     $transaction,
   } as unknown as PrismaService;
 
-  const mkScraper = (src: 'gamejob' | 'wanted' | 'jobkorea', r: any) =>
+  const mkScraper = (
+    src: 'gamejob' | 'wanted' | 'jobkorea' | 'saramin',
+    r: any,
+  ) =>
     ({
       source: src,
       fetchJobList: jest.fn(() =>
@@ -31,14 +36,16 @@ function build(
   const gj = mkScraper('gamejob', gjResult);
   const wt = mkScraper('wanted', wtResult);
   const jk = mkScraper('jobkorea', jkResult);
+  const sr = mkScraper('saramin', srResult);
   return {
-    service: new JobsService(gj, wt, jk, prisma),
+    service: new JobsService(gj, wt, jk, sr, prisma),
     upsert,
     findMany,
     $transaction,
     gj,
     wt,
     jk,
+    sr,
   };
 }
 
@@ -72,6 +79,7 @@ describe('JobsService', () => {
       { jobs: [gjRaw], totalPages: 3 },
       { jobs: [wtRaw], totalPages: 5 },
       { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
     );
     await service.getJobsPage(1);
     expect(upsert).toHaveBeenCalledTimes(1);
@@ -88,6 +96,7 @@ describe('JobsService', () => {
       { jobs: [gjRaw], totalPages: 3 },
       { jobs: [otherWt], totalPages: 5 },
       { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
     );
     await service.getJobsPage(1);
     expect(upsert).toHaveBeenCalledTimes(2);
@@ -97,6 +106,7 @@ describe('JobsService', () => {
     const { service } = build(
       { jobs: [gjRaw], totalPages: 3 },
       { jobs: [wtRaw], totalPages: 7 },
+      { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
     );
     const res = await service.getJobsPage(1);
@@ -108,6 +118,7 @@ describe('JobsService', () => {
     const { service, upsert } = build(
       new Error('gamejob down'),
       { jobs: [wtRaw], totalPages: 5 },
+      { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
     );
     const res = await service.getJobsPage(1);
@@ -123,6 +134,7 @@ describe('JobsService', () => {
       new Error('a'),
       new Error('b'),
       new Error('c'),
+      new Error('d'),
     );
     await expect(service.getJobsPage(1)).rejects.toThrow();
   });
@@ -130,6 +142,7 @@ describe('JobsService', () => {
   it('성공한 소스가 0건이어도 failedSources는 비어 있다', async () => {
     const { service, upsert } = build(
       { jobs: [gjRaw], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
     );
@@ -154,10 +167,35 @@ describe('JobsService', () => {
       { jobs: [], totalPages: 1 },
       { jobs: [], totalPages: 1 },
       { jobs: [jkRaw], totalPages: 5 },
+      { jobs: [], totalPages: 1 },
     );
     await service.getJobsPage(1);
     expect(upsert).toHaveBeenCalledTimes(1);
     expect(upsert.mock.calls[0][0].create.source).toBe('jobkorea');
     expect(upsert.mock.calls[0][0].where).toEqual({ id: 'jobkorea:49228661' });
+  });
+
+  it('사람인 결과도 라우팅에 합류한다', async () => {
+    const srRaw: RawJob = {
+      source: 'saramin',
+      sourceId: '53625619',
+      company: '사람인테스트',
+      companyUrl: '',
+      title: '[신입/경력] 게임 아트 원화가 모집',
+      detailUrl: 'https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx=53625619',
+      deadline: '~ 06/13(토)',
+      registeredAtText: '등록일 26/04/14',
+      tags: ['서울', '경력무관'],
+    };
+    const { service, upsert } = build(
+      { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
+      { jobs: [], totalPages: 1 },
+      { jobs: [srRaw], totalPages: 2 },
+    );
+    await service.getJobsPage(1);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0][0].create.source).toBe('saramin');
+    expect(upsert.mock.calls[0][0].where).toEqual({ id: 'saramin:53625619' });
   });
 });

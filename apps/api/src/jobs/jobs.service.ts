@@ -3,6 +3,7 @@ import type { Job, JobSource, JobsResponse } from '@bini/types';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { WantedScraperService } from '../scraper/wanted-scraper.service';
 import { JobkoreaScraperService } from '../scraper/jobkorea-scraper.service';
+import { SaraminScraperService } from '../scraper/saramin-scraper.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseTitle } from '../title/title-parser';
 import { parseRelativeTime } from '../time/relative-time';
@@ -19,9 +20,10 @@ export class JobsService {
     gamejob: GamejobScraperService,
     wanted: WantedScraperService,
     jobkorea: JobkoreaScraperService,
+    saramin: SaraminScraperService,
     private readonly prisma: PrismaService,
   ) {
-    this.scrapers = [gamejob, wanted, jobkorea];
+    this.scrapers = [gamejob, wanted, jobkorea, saramin];
   }
 
   /**
