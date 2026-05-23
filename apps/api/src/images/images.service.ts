@@ -2,39 +2,39 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { GameImageResponse, ImageQueryType, ImageStatus } from '@bini/types';
 import { GameImageService } from '../image/game-image.service';
 import { GoogleImageService } from '../image/google-image.service';
-import { GoogleCrawlerImageService } from '../image/google-crawler.service';
 import type { ImageProvider, ImageResult } from '../image/image-provider';
 import { PrismaService } from '../prisma/prisma.service';
 
-const STATUSES: ImageStatus[] = ['found', 'not_found', 'error'];
+const STATUSES: ImageStatus[] = ['found', 'not_found', 'error', 'blocked'];
 function toStatus(v: string): ImageStatus {
   return (STATUSES as string[]).includes(v) ? (v as ImageStatus) : 'not_found';
 }
 
+/**
+ * Vercel/runtime 이미지 조회 — DB 캐시 우선, 미스 시 가벼운 외부 API만 호출.
+ *
+ * 우선순위:
+ *   1) `game_images` 캐시 히트 → 그대로 반환 (`apps/crawler`가 cron으로 채워두는 Google 결과 포함)
+ *   2) 캐시 미스 시 Google CSE API (env GOOGLE_CSE_API_KEY + GOOGLE_CSE_ID 둘 다 있을 때)
+ *   3) Naver 이미지 검색 (최후 폴백)
+ *
+ * 런타임에서 Playwright나 헤드리스 브라우저는 호출하지 않는다 (Vercel 서버리스 무관용).
+ * 대신 `apps/crawler` 워크스페이스가 GitHub Actions cron으로 Google 크롤링을 돌려
+ * `game_images`에 미리 채워두는 구조.
+ */
 @Injectable()
 export class ImagesService {
   private readonly logger = new Logger(ImagesService.name);
 
-  // 같은 검색어에 대한 동시 요청이 외부 검색을 중복 호출하지 않도록 진행 중 작업을 공유.
+  // 같은 검색어 동시 요청이 외부 검색을 중복 호출하지 않도록 진행 중 작업을 공유.
   private readonly inflight = new Map<string, Promise<GameImageResponse>>();
 
   constructor(
     private readonly naver: GameImageService,
     private readonly googleApi: GoogleImageService,
-    private readonly googleCrawler: GoogleCrawlerImageService,
     private readonly prisma: PrismaService,
   ) {}
 
-  /**
-   * 캐시 우선 조회. 미스 시 외부 검색을 호출하고 결과를 캐시한다.
-   *
-   * 검색 우선순위(처음 found가 나오면 거기서 멈춤):
-   *   1) GoogleCrawler (Playwright headless chromium, 기본 ON — `GOOGLE_CRAWLER=0`이면 OFF)
-   *   2) Google CSE API (env GOOGLE_CSE_API_KEY + GOOGLE_CSE_ID 둘 다 있을 때)
-   *   3) Naver 이미지 검색 (항상 사용 가능, 최후 폴백)
-   *
-   * 빈 검색어는 외부 호출 없이 not_found.
-   */
   async resolve(query: string, queryType: ImageQueryType): Promise<GameImageResponse> {
     if (query.length === 0) {
       return { query, imageUrl: null, status: 'not_found' };
@@ -42,11 +42,16 @@ export class ImagesService {
 
     const cached = await this.prisma.gameImage.findUnique({ where: { query } });
     if (cached) {
-      // 캐시 무효화: Naver 결과가 not_found였고 지금은 더 강한 제공자가 켜져 있으면 재시도.
+      // 'blocked' 행은 캐시 사용 — 다음 크론에서 재시도되도록 둔다.
+      // (런타임에서 다시 외부 호출해 봤자 같은 차단을 만날 가능성이 크다.)
+      if (cached.status === 'blocked') {
+        return { query, imageUrl: null, status: 'blocked' };
+      }
+      // Naver/not_found는 CSE가 켜져있으면 1회 업그레이드 시도.
       const upgradeable =
         cached.source === 'naver' &&
         cached.status === 'not_found' &&
-        (this.googleCrawler.isConfigured() || this.googleApi.isConfigured());
+        this.googleApi.isConfigured();
       if (!upgradeable) {
         return { query, imageUrl: cached.imageUrl, status: toStatus(cached.status) };
       }
@@ -69,7 +74,6 @@ export class ImagesService {
     queryType: ImageQueryType,
   ): Promise<GameImageResponse> {
     const chain: Array<{ provider: ImageProvider; active: boolean }> = [
-      { provider: this.googleCrawler, active: this.googleCrawler.isConfigured() },
       { provider: this.googleApi, active: this.googleApi.isConfigured() },
       { provider: this.naver, active: true },
     ];
