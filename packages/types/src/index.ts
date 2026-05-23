@@ -55,3 +55,17 @@ export interface JobImagesResponse {
   companyLogoUrl: string | null;
   representativeGames: string[];
 }
+
+export type CareerSiteCategory = 'company' | 'jobBoard' | 'companyInfo';
+
+export interface CareerSiteLink {
+  name: string;
+  url: string;
+  category: CareerSiteCategory;
+}
+
+export interface CareerSitesResponse {
+  sites: CareerSiteLink[];
+  source: string; // 'github:GameForPeople/korea-game-career-site'
+  fetchedAt: string; // ISO 8601
+}
