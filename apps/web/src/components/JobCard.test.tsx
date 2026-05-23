@@ -32,6 +32,7 @@ const baseJob: Job = {
   companyLogoUrl: null,
   companyPhotos: [],
   representativeGames: [],
+  expired: false,
 };
 
 describe('JobCard', () => {
@@ -85,6 +86,12 @@ describe('JobCard', () => {
       const job: Job = { ...baseJob, source: 'jobkorea' as const };
       render(<JobCard job={job} />);
       expect(screen.getByText(/잡코리아/i)).toBeInTheDocument();
+    });
+
+    it('renders the saramin source label', () => {
+      const job: Job = { ...baseJob, source: 'saramin' as const };
+      render(<JobCard job={job} />);
+      expect(screen.getByText(/사람인/i)).toBeInTheDocument();
     });
 
     it('renders +N alternateSources count when present', () => {
