@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Job, JobsResponse } from '@bini/types';
+import type { Job, JobSource, JobsResponse } from '@bini/types';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseTitle } from '../title/title-parser';
@@ -62,7 +62,7 @@ export class JobsService {
 }
 
 function toJobDto(row: {
-  id: string; company: string; companyUrl: string; title: string;
+  id: string; source: string; company: string; companyUrl: string; title: string;
   detailUrl: string; deadline: string; registeredAt: Date; tags: string[];
   gameTitle: string | null; imageQuery: string; imageQueryType: string;
   companyLogoUrl: string | null; companyPhotos: string[]; representativeGames: string[];
@@ -70,8 +70,10 @@ function toJobDto(row: {
   // imageQueryType은 DB에 free-form String으로 저장되므로 런타임 가드.
   const imageQueryType: Job['imageQueryType'] =
     row.imageQueryType === 'game' ? 'game' : 'company';
+  const source: JobSource = row.source === 'wanted' ? 'wanted' : 'gamejob';
   return {
     id: row.id,
+    source,
     company: row.company,
     companyUrl: row.companyUrl,
     title: row.title,
@@ -82,6 +84,7 @@ function toJobDto(row: {
     gameTitle: row.gameTitle,
     imageQuery: row.imageQuery,
     imageQueryType,
+    alternateSources: [],
     companyLogoUrl: row.companyLogoUrl,
     companyPhotos: row.companyPhotos,
     representativeGames: row.representativeGames,

@@ -1,8 +1,15 @@
 export type ImageQueryType = 'game' | 'company';
 export type ImageStatus = 'found' | 'not_found' | 'error';
+export type JobSource = 'gamejob' | 'wanted';
+
+export interface AlternateSource {
+  source: JobSource;
+  detailUrl: string;
+}
 
 export interface Job {
   id: string;
+  source: JobSource;
   company: string;
   companyUrl: string;
   title: string;
@@ -13,6 +20,7 @@ export interface Job {
   gameTitle: string | null;
   imageQuery: string;
   imageQueryType: ImageQueryType;
+  alternateSources: AlternateSource[]; // dedup 시 흡수된 다른 소스의 동일 공고들
   /** GameJob 상세페이지에서 lazy 채워지는 회사 로고 URL. 미스크랩이면 null. */
   companyLogoUrl: string | null;
   /** GameJob 상세페이지의 회사 사진들(최대 4장). 미스크랩이면 빈 배열. */
@@ -25,6 +33,7 @@ export interface JobsResponse {
   page: number;
   totalPages: number;
   jobs: Job[];
+  failedSources?: JobSource[]; // 일부 소스 실패 시 메타로 노출
 }
 
 export interface GameImageResponse {

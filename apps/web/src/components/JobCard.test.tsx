@@ -17,6 +17,7 @@ vi.mock('./CompanyAvatar', () => ({
 
 const baseJob: Job = {
   id: '278454',
+  source: 'gamejob' as const,
   company: '게임듀오',
   companyUrl: 'https://www.gamejob.co.kr/Company/Detail?M=1',
   title: '[p.일렌시아] 배경 도트 디자이너',
@@ -27,6 +28,7 @@ const baseJob: Job = {
   gameTitle: 'p.일렌시아',
   imageQuery: 'p.일렌시아 게임',
   imageQueryType: 'game',
+  alternateSources: [],
   companyLogoUrl: null,
   companyPhotos: [],
   representativeGames: [],
