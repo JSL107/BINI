@@ -244,3 +244,30 @@
 21개 다른 `category_tags` 값(517,643,644,650-653,660,670,680,690,873,916,959,1024-1026,1071,1635,1636)을 모두 probe한 결과 **전부 동일한 39건/1 art match 반환**. → chaos API의 `category_tags` 파라미터는 무시되고 있음. 인증된 API 또는 헤드리스 브라우저(Playwright)를 통한 Wanted UI 우회 없이는 추가 art 결과 확보 불가.
 
 → Wanted는 현 "1건/페이지 best-effort" 상태 유지. 추가 소스(사람인 등)가 더 큰 ROI.
+
+## 사람인 (Saramin) — 2026-05-23
+
+- URL: `https://www.saramin.co.kr/zf_user/search/recruit?searchType=search&searchword=게임 원화&recruitPage=<N>`
+- 응답: 클래식 SSR HTML, UTF-8, ~2.3MB, 페이지당 ~26 `item_recruit` 카드.
+- 셀렉터: `div.item_recruit[value=<sourceId>]`, `h2.job_tit > a`, `.area_corp strong.corp_name a`, `.job_date span.date` (마감), `span.job_day` (등록일 `등록일 yy/MM/dd`).
+- "게임 원화" 검색이 이미 카테고리("원화") 기반 매칭이라 art-filter 불필요. 전부 art 직무.
+- 차단 없음, UA만 있으면 응답.
+
+## 인크루트 (Incruit) — 2026-05-23
+
+- URL: `https://job.incruit.com/jobdb_list/searchjob.asp?ct=1&ty=3&cd=12690&PageNo=<N>` (cd=12690 = 원화·일러스트 카테고리)
+- ⚠️ **응답 인코딩: EUC-KR**. fetch 후 `iconv-lite.decode(buf, 'euc-kr')` 필수.
+- 셀렉터: `ul.c_row[jobno=<sourceId>]`, `.cell_first a.cpname` (회사), `.cell_mid .cl_top a[href*="jobdb_info"]` (제목+URL), `.cell_mid .cl_md span` (지역/경력/학력/형태), `.cell_last .cl_btm span:first` (마감), `:nth-child(2)` (수정 시각 `(N일전 수정)`).
+- 카테고리 사전 필터라 art-filter 불필요.
+
+## Phase 3 5-소스 E2E 검증 (2026-05-23)
+
+`GET /api/jobs?page=1` 라이브:
+- HTTP 200, 1.65s
+- jobs.length = **93** (gamejob:40 + saramin:24 + incruit:17 + jobkorea:11 + wanted:1)
+- failedSources = undefined — 5소스 모두 성공
+- totalPages = 8
+- **dedup 히트 2건 (multi-source의 실제 가치 입증)**:
+  - "카발세계관 3D 애니메이터" — jobkorea + saramin + incruit 3소스 매칭, primary=jobkorea
+  - "트리노드 AX 인턴 채용공고" — gamejob + saramin 매칭, primary=gamejob
+
