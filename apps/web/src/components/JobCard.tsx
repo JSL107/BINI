@@ -1,12 +1,21 @@
 import type { Job } from '@bini/types';
-import { GameImage } from './GameImage';
+import { JobImageCarousel } from './JobImageCarousel';
+import { CompanyAvatar } from './CompanyAvatar';
 
 export function JobCard({ job }: { job: Job }) {
   return (
     <article className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-      <GameImage query={job.imageQuery} type={job.imageQueryType} />
+      <JobImageCarousel
+        jobId={job.id}
+        fallbackQuery={job.imageQuery}
+        fallbackType={job.imageQueryType}
+        alt={job.title}
+      />
       <div className="space-y-2 p-4">
-        <p className="text-sm text-gray-500">{job.company}</p>
+        <div className="flex items-center gap-2">
+          <CompanyAvatar logoUrl={job.companyLogoUrl} name={job.company} />
+          <p className="text-sm text-gray-500">{job.company}</p>
+        </div>
         <a
           href={job.detailUrl}
           target="_blank"
