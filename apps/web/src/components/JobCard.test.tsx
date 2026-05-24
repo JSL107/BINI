@@ -33,6 +33,10 @@ const baseJob: Job = {
   companyPhotos: [],
   representativeGames: [],
   expired: false,
+  experienceLevel: null,
+  employmentType: null,
+  locations: [],
+  isRemote: false,
 };
 
 describe('JobCard', () => {

@@ -1,14 +1,68 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Injectable, Logger } from '@nestjs/common';
-import type { CareerSiteLink, CareerSitesResponse } from '@bini/types';
+import type {
+  CareerSiteLink,
+  CareerSitesResponse,
+  CompanyDetailResponse,
+  JobSource,
+} from '@bini/types';
 import { parseCareerSitesMarkdown } from './companies-parser';
 import { BROWSER_UA } from '../scraper/http-constants';
+import { PrismaService } from '../prisma/prisma.service';
+import { toJobDto } from '../jobs/jobs-cron.service';
 
 const README_URL =
   'https://raw.githubusercontent.com/GameForPeople/korea-game-career-site/master/README.md';
-const SOURCE_ID = 'github:GameForPeople/korea-game-career-site';
+const SOURCE_ID = 'github:GameForPeople/korea-game-career-site+bini-extras';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const PING_TIMEOUT_MS = 4_000;
 const PING_CONCURRENCY = 30;
+
+// BINI 자체 큐레이션 보강 목록. upstream README가 줄어들면서 빠진 회사 + 신규
+// 발굴 회사. nest-cli.json assets 설정으로 dist/companies/ 하위에 복사된다.
+const EXTRA_MD_PATH = join(__dirname, 'extra-career-sites.md');
+let EXTRA_MARKDOWN = '';
+try {
+  EXTRA_MARKDOWN = readFileSync(EXTRA_MD_PATH, 'utf-8');
+} catch {
+  // 파일이 없어도 upstream만으로 동작. 에러는 service 생성 시점에 로그.
+  EXTRA_MARKDOWN = '';
+}
+
+/**
+ * URL을 dedupe 키로 정규화: 프로토콜/대소문자/끝 슬래시 차이를 흡수하고
+ * host + pathname만 비교한다. www. 접두사는 제거. query/hash는 무시.
+ */
+export function canonicalUrlKey(url: string): string {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase().replace(/^www\./, '');
+    const path = u.pathname.replace(/\/+$/, '') || '/';
+    return `${host}${path}`;
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
+/**
+ * 두 CareerSiteLink 리스트를 URL 키 기준으로 dedupe. 같은 키가 있으면
+ * 첫 번째(= upstream 우선) 항목을 유지.
+ */
+export function dedupeCareerSites(
+  primary: readonly CareerSiteLink[],
+  extra: readonly CareerSiteLink[],
+): CareerSiteLink[] {
+  const seen = new Set<string>();
+  const out: CareerSiteLink[] = [];
+  for (const site of [...primary, ...extra]) {
+    const key = canonicalUrlKey(site.url);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(site);
+  }
+  return out;
+}
 
 function isSafeHostname(hostname: string): boolean {
   // IPv4 literal check
@@ -36,6 +90,94 @@ function isSafeHostname(hostname: string): boolean {
 export class CompaniesService {
   private readonly logger = new Logger(CompaniesService.name);
   private cached: { response: CareerSitesResponse; expiresAt: number } | null = null;
+  private readonly extraSites: readonly CareerSiteLink[];
+
+  constructor(private readonly prisma: PrismaService) {
+    this.extraSites = EXTRA_MARKDOWN
+      ? Object.freeze(parseCareerSitesMarkdown(EXTRA_MARKDOWN))
+      : [];
+    if (this.extraSites.length === 0 && EXTRA_MARKDOWN === '') {
+      this.logger.warn(`extra-career-sites.md 로드 실패 — upstream만 사용 (path: ${EXTRA_MD_PATH})`);
+    } else {
+      this.logger.log(`extra-career-sites 로드: ${this.extraSites.length}건`);
+    }
+  }
+
+  /**
+   * 한 회사의 BINI 통합 잡 + 회사 메타데이터(로고/사진/대표게임/소스/외부 채용 페이지).
+   *
+   * - 회사명은 정확 일치(case-insensitive). DB의 jobs.company는 사이트마다 표기
+   *   미세 차이가 있을 수 있어 trim + 대소문자 무시 매칭.
+   * - 만료 잡도 포함 (사용자가 직접 조회한 경우 과거 잡 조회 가치 있음).
+   * - 회사 메타데이터는 잡들의 enrichment 결과 합집합으로 합성.
+   */
+  async getCompanyByName(rawName: string): Promise<CompanyDetailResponse | null> {
+    const name = rawName.trim();
+    if (!name) return null;
+    const rows = await this.prisma.job.findMany({
+      where: {
+        company: { equals: name, mode: 'insensitive' as const },
+      },
+      orderBy: [{ registeredAt: 'desc' }, { id: 'desc' }],
+    });
+    if (rows.length === 0) return null;
+
+    const jobs = rows.map((row) => toJobDto(row));
+
+    // 회사명 정규화 — 첫 잡의 표기 사용 (사용자가 검색한 형태와 다를 수 있음).
+    const canonicalName = rows[0].company;
+
+    // logoUrl: 첫 비-null
+    const logoUrl =
+      rows.find((r) => r.companyLogoUrl !== null && r.companyLogoUrl.length > 0)
+        ?.companyLogoUrl ?? null;
+
+    // photos / representativeGames: 합집합 dedup
+    const photoSet = new Set<string>();
+    const photos: string[] = [];
+    for (const r of rows) {
+      for (const p of r.companyPhotos) {
+        if (!photoSet.has(p)) {
+          photoSet.add(p);
+          photos.push(p);
+        }
+      }
+    }
+    const gameSet = new Set<string>();
+    const representativeGames: string[] = [];
+    for (const r of rows) {
+      for (const g of r.representativeGames) {
+        if (!gameSet.has(g)) {
+          gameSet.add(g);
+          representativeGames.push(g);
+        }
+      }
+    }
+
+    // sources: unique
+    const sourceSet = new Set<string>();
+    const sources: JobSource[] = [];
+    for (const j of jobs) {
+      if (!sourceSet.has(j.source)) {
+        sourceSet.add(j.source);
+        sources.push(j.source);
+      }
+    }
+
+    // externalCareerUrl: 첫 비-empty companyUrl
+    const externalCareerUrl =
+      rows.find((r) => r.companyUrl && r.companyUrl.length > 0)?.companyUrl ?? null;
+
+    return {
+      name: canonicalName,
+      logoUrl,
+      photos,
+      representativeGames,
+      sources,
+      externalCareerUrl,
+      jobs,
+    };
+  }
 
   async getCareerSites(): Promise<CareerSitesResponse> {
     const now = Date.now();
@@ -76,9 +218,13 @@ export class CompaniesService {
         return [];
       }
       const md = await res.text();
-      const sites = parseCareerSitesMarkdown(md);
-      this.logger.log(`Career sites parsed: ${sites.length}건`);
-      return sites;
+      const upstream = parseCareerSitesMarkdown(md);
+      // upstream을 우선시하면서 BINI 보강 목록과 URL 기준 dedupe.
+      const merged = dedupeCareerSites(upstream, this.extraSites);
+      this.logger.log(
+        `Career sites parsed: upstream ${upstream.length} + extras ${this.extraSites.length} → merged ${merged.length}건`,
+      );
+      return merged;
     } catch (err) {
       this.logger.warn(`GitHub README fetch 예외: ${String(err)}`);
       return [];

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Job, JobSource } from '@bini/types';
 import { JobImageCarousel } from './JobImageCarousel';
 import { CompanyAvatar } from './CompanyAvatar';
@@ -66,7 +67,14 @@ export function JobCard({ job }: { job: Job }) {
               D-{deadline.daysRemaining}
             </span>
           ) : null}
-          <p className="text-sm text-gray-500">{job.company}</p>
+          <Link
+            href={`/company/${encodeURIComponent(job.company)}`}
+            onClick={(e) => e.stopPropagation()}
+            className="rounded text-sm text-gray-700 hover:text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            title={`${job.company} 회사 페이지 보기`}
+          >
+            {job.company}
+          </Link>
           {/* 잡플래닛 회사 검색 — 회사 평판·연봉·면접 정보 빠른 진입 */}
           <a
             href={jobplanetSearchUrl(job.company)}
