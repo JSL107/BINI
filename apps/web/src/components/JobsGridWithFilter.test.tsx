@@ -28,6 +28,10 @@ function mkJob(over: Partial<Job> & { id: string; source: JobSource }): Job {
     companyPhotos: [],
     representativeGames: [],
     expired: false,
+    experienceLevel: null,
+    employmentType: null,
+    locations: [],
+    isRemote: false,
     ...over,
   };
 }
