@@ -8,6 +8,7 @@
     "start": "node --import tsx/esm src/index.ts",
     "crawl": "node --import tsx/esm src/index.ts",
     "crawl:namuwiki": "node --import tsx/esm src/namuwiki-main.ts",
+    "crawl:saramin": "node --import tsx/esm src/saramin-details.ts",
     "expire": "node --import tsx/esm src/expire.ts",
     "install:chromium": "playwright install --with-deps chromium"
   },
