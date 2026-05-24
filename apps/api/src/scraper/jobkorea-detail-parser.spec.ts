@@ -21,6 +21,36 @@ describe('parseJobkoreaMain', () => {
       bodyImages: [],
     });
   });
+
+  it('잡코리아 fallback 로고 (`잡코리아 로고_1.png`)는 회사 로고로 채택하지 않는다', () => {
+    const synthetic = `
+      <html><body>
+        <img src="https://file2.jobkorea.co.kr/Net/Mng/Image/LogoImage?FN=2026/05/잡코리아 로고_1.png">
+      </body></html>
+    `;
+    expect(parseJobkoreaMain(synthetic).companyLogoUrl).toBeNull();
+  });
+
+  it('잡코리아 fallback이 먼저 있어도 그 뒤 실제 회사 로고가 있으면 그것을 채택한다', () => {
+    const synthetic = `
+      <html><body>
+        <img src="https://file2.jobkorea.co.kr/Net/Mng/Image/LogoImage?FN=2026/05/잡코리아 로고_1.png">
+        <img src="https://file2.jobkorea.co.kr/Net/Mng/Image/LogoImage?FN=2026/05/com2us.png">
+      </body></html>
+    `;
+    expect(parseJobkoreaMain(synthetic).companyLogoUrl).toBe(
+      'https://file2.jobkorea.co.kr/Net/Mng/Image/LogoImage?FN=2026/05/com2us.png',
+    );
+  });
+
+  it('URL-encoded 잡코리아 placeholder도 컷한다', () => {
+    const synthetic = `
+      <html><body>
+        <img src="https://file2.jobkorea.co.kr/Net/Mng/Image/LogoImage?FN=2026/05/%EC%9E%A1%EC%BD%94%EB%A6%AC%EC%95%84%20%EB%A1%9C%EA%B3%A0_1.png">
+      </body></html>
+    `;
+    expect(parseJobkoreaMain(synthetic).companyLogoUrl).toBeNull();
+  });
 });
 
 describe('parseJobkoreaBodyImages', () => {

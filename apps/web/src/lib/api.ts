@@ -4,18 +4,41 @@ import type {
   ImageQueryType,
   JobImagesResponse,
   CareerSitesResponse,
+  CompanyDetailResponse,
 } from '@bini/types';
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api';
 
+export interface JobsQueryOptions {
+  search?: string;
+  /** 다중 OR. CSV로 직렬화되어 ?experience= 에 전달. */
+  experience?: string[];
+  /** 다중 OR. CSV로 직렬화되어 ?employmentType= 에 전달. */
+  employmentType?: string[];
+  /** 다중 OR. 시도 라벨 (예: ['서울','경기']). hasSome 의미. */
+  location?: string[];
+  /** true일 때만 isRemote=true 필터. false/undefined는 무필터. */
+  remote?: boolean;
+}
+
 export async function fetchJobs(
   page: number,
-  search?: string,
+  opts: JobsQueryOptions = {},
 ): Promise<JobsResponse> {
   const params = new URLSearchParams({ page: String(page) });
-  if (search) params.set('q', search);
+  if (opts.search) params.set('q', opts.search);
+  if (opts.experience && opts.experience.length > 0) {
+    params.set('experience', opts.experience.join(','));
+  }
+  if (opts.employmentType && opts.employmentType.length > 0) {
+    params.set('employmentType', opts.employmentType.join(','));
+  }
+  if (opts.location && opts.location.length > 0) {
+    params.set('location', opts.location.join(','));
+  }
+  if (opts.remote === true) params.set('remote', 'true');
   // 30s 데이터 캐시 — cron이 잡 갱신을 3h 주기로 돌리므로 30s 지연은 안전.
-  // 같은 page+search 조합 첫 사용자만 cold path를 타고 그 후 30초 동안은
+  // 같은 page+필터 조합 첫 사용자만 cold path를 타고 그 후 30초 동안은
   // Vercel Edge가 즉시 응답.
   const res = await fetch(`${BASE}/jobs?${params.toString()}`, {
     next: { revalidate: 30 },
@@ -44,6 +67,22 @@ export async function fetchJobImages(jobId: string): Promise<JobImagesResponse> 
     { next: { revalidate: 10 } },
   );
   if (!res.ok) throw new Error(`잡 이미지 요청 실패: HTTP ${res.status}`);
+  return res.json();
+}
+
+/**
+ * 회사명으로 BINI 통합 잡 + 회사 메타데이터 조회. 404일 경우 null 반환
+ * (Next.js의 notFound() 트리거에 사용).
+ *
+ * 30s revalidate — 회사 잡 변화가 cron(3h) 단위라 30s는 안전, Edge 캐시도 활용.
+ */
+export async function fetchCompanyByName(
+  name: string,
+): Promise<CompanyDetailResponse | null> {
+  const url = `${BASE}/companies/by-name?q=${encodeURIComponent(name)}`;
+  const res = await fetch(url, { next: { revalidate: 30 } });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`회사 조회 실패: HTTP ${res.status}`);
   return res.json();
 }
 

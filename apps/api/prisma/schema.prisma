@@ -38,9 +38,28 @@ model Job {
   // 만료 플래그 — cron이 lastSeenAt + 7d 경과 시 채움. 응답엔 expired:boolean 으로 노출.
   expiredAt           DateTime? @db.Timestamptz(3)
 
+  // 다중 소스 dedup 영속화. normalizedKey는 (company+title) 정규화 결과.
+  // primaryJobId가 null이면 이 잡이 primary, 아니면 그 잡의 alias.
+  // 사용자 응답 경로는 primaryJobId is null만 노출하고 aliases는 alternateSources로 합성.
+  normalizedKey  String?
+  primaryJobId   String?
+  primary        Job?     @relation("JobAliases", fields: [primaryJobId], references: [id], onDelete: SetNull)
+  aliases        Job[]    @relation("JobAliases")
+
+  // tags + title에서 cron 시점에 추출되는 derived 속성. UI 필터/통계용.
+  experienceLevel String?
+  employmentType  String?
+  locations       String[] @default([])
+  isRemote        Boolean  @default(false)
+
   @@index([registeredAt])
   @@index([expiredAt])
   @@index([source])
+  @@index([normalizedKey])
+  @@index([primaryJobId])
+  @@index([experienceLevel])
+  @@index([employmentType])
+  @@index([isRemote])
   @@map("jobs")
 }
 

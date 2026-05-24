@@ -90,15 +90,39 @@ function abs(src: string | undefined | null): string | null {
   return null;
 }
 
+/**
+ * 잡코리아가 회사가 자체 로고를 안 올린 잡에 자동으로 채워넣는 placeholder
+ * 로고 파일명 패턴. URL-encoded 또는 raw 둘 다 매칭한다.
+ *   - `잡코리아 로고_*.png` (raw 한글)
+ *   - `%EC%9E%A1%EC%BD%94%EB%A6%AC%EC%95%84` ("잡코리아" URL-encoded)
+ *   - `JK_Logo` / `jobkorea_logo` 영문 변형
+ */
+function isJobkoreaPlaceholderLogo(url: string): boolean {
+  // FN= 파라미터를 디코딩해 파일명 검사
+  let decoded = url;
+  try {
+    decoded = decodeURIComponent(url);
+  } catch {
+    // 디코드 실패 시 원본으로
+  }
+  if (/잡코리아\s*로고/i.test(decoded)) return true;
+  if (/%EC%9E%A1%EC%BD%94%EB%A6%AC%EC%95%84/i.test(url)) return true;
+  if (/JK_Logo|jobkorea[_\s]*logo/i.test(decoded)) return true;
+  return false;
+}
+
 export function parseJobkoreaMain(html: string): JobDetailExtract {
   const $ = cheerio.load(html);
 
   // 회사 로고: file*.jobkorea.co.kr/.../LogoImage?FN=... 첫 매치.
+  // 단 잡코리아의 fallback placeholder(`잡코리아 로고_1.png`)는 회사 식별에
+  // 도움이 안 되므로 null로 떨어뜨린다.
   let companyLogoUrl: string | null = null;
   $('img').each((_, el) => {
     if (companyLogoUrl) return false;
     const url = abs($(el).attr('src'));
     if (url && /file\d?\.jobkorea\.co\.kr\/.+\/LogoImage/i.test(url)) {
+      if (isJobkoreaPlaceholderLogo(url)) return undefined; // 다음 img 시도
       companyLogoUrl = url;
       return false;
     }

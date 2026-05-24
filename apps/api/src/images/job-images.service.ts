@@ -150,10 +150,17 @@ export class JobImagesService {
     const repImages = repResults.filter((u): u is string => !!u);
 
     // bracket은 lazy — 다른 sources(본문/위키/rep)가 비었을 때만 발화 (정합성 우선).
+    // 또 imageQuery가 게임명이 아니라 직군/기술 일반 단어("3D 모델링", "디자이너")면
+    // Naver 검색 결과가 무관한 프리랜서 마켓·기술 강의 이미지로 떨어지므로 skip.
     let bracketUrl: string | null = null;
     const otherAvailable =
       job.bodyImages.length > 0 || namuwikiImages.length > 0 || repImages.length > 0;
-    if (!otherAvailable && job.imageQueryType === 'game' && job.imageQuery.length > 0) {
+    if (
+      !otherAvailable &&
+      job.imageQueryType === 'game' &&
+      job.imageQuery.length > 0 &&
+      !isGenericBracketTerm(job.imageQuery)
+    ) {
       bracketUrl = await this.images
         .resolve(job.imageQuery, 'game')
         .then((r) => r.imageUrl)
@@ -230,4 +237,72 @@ function dedup(urls: string[]): string[] {
     }
   }
   return out;
+}
+
+/**
+ * 잡 제목 첫 대괄호에서 추출된 imageQuery가 게임명이 아니라 직군/기술/일반
+ * 명사일 때 true. 이런 단어로 bracket Naver 검색하면 무관한 프리랜서 마켓
+ * 이미지·기술 강의 썸네일·재고 사진이 결과로 떨어진다 (실측: saramin
+ * "3D 모델링" → kmong gig 이미지). bracket fallback 자체를 skip한다.
+ *
+ * 비교는 공백 split + 전체 단어가 generic이면 true. 한 단어라도 비-generic
+ * (가능 게임명)이면 false → bracket 발화 통과.
+ */
+export function isGenericBracketTerm(query: string): boolean {
+  const GENERIC = new Set([
+    // 차원/기술 약자
+    '2d',
+    '3d',
+    'vfx',
+    'ui',
+    'ux',
+    'ar',
+    'vr',
+    'cg',
+    'fx',
+    // 직군·역할
+    '디자이너',
+    '아티스트',
+    '원화',
+    '원화가',
+    '애니메이터',
+    '모델러',
+    '그래픽',
+    '일러스트',
+    '일러스트레이터',
+    '컨셉',
+    '컨셉트',
+    '리거',
+    '리깅',
+    '텍스처',
+    '모션',
+    '이펙트',
+    '레이아웃',
+    // 카테고리
+    '캐릭터',
+    '배경',
+    '오브젝트',
+    '몬스터',
+    '아이템',
+    // 작업 종류
+    '모델링',
+    '애니메이션',
+    '인디',
+    '아트',
+    '게임',
+    '신작',
+    '프로젝트',
+    '콘텐츠',
+    '계약직',
+    '정규직',
+    '경력',
+    '신입',
+  ]);
+  const parts = query
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((p) => p.length > 0);
+  if (parts.length === 0) return true;
+  return parts.every((p) => GENERIC.has(p));
 }
