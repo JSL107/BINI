@@ -117,12 +117,15 @@ export class CompaniesService {
   }
 
   private async pingAlive(url: string): Promise<boolean> {
+    // http URL은 브라우저처럼 https로 자동 normalize해 시도 (사이트가 https 지원 시 alive).
+    // 외부 README가 갱신 안 된 채 http만 적힌 케이스가 흔하다.
+    const normalized = url.replace(/^http:\/\//i, 'https://');
     try {
-      const u = new URL(url);
+      const u = new URL(normalized);
       if (u.protocol !== 'https:') return false;
       if (!isSafeHostname(u.hostname)) return false;
 
-      const res = await fetch(url, {
+      const res = await fetch(normalized, {
         method: 'GET',
         redirect: 'manual',
         signal: AbortSignal.timeout(PING_TIMEOUT_MS),
@@ -133,9 +136,61 @@ export class CompaniesService {
           'Accept-Language': 'ko-KR,ko;q=0.9',
         },
       });
-      // Body 읽지 않고 즉시 cancel — status만 확인.
-      void res.body?.cancel().catch(() => undefined);
-      return res.status >= 200 && res.status < 400;
+
+      // 3xx: 같은 호스트 안에서 메인 path로 redirect = 채용 운영 종료 시그널.
+      // 채용 path를 유지하는 redirect(https 강제, www 표준화)는 alive로 인정.
+      if (res.status >= 300 && res.status < 400) {
+        const loc = res.headers.get('location');
+        if (!loc) return false;
+        try {
+          const next = new URL(loc, normalized);
+          if (next.hostname === u.hostname || next.hostname === 'www.' + u.hostname) {
+            const p = next.pathname.toLowerCase();
+            const isMain =
+              p === '' ||
+              p === '/' ||
+              p === '/index' ||
+              p === '/index.html' ||
+              p === '/main' ||
+              p === '/home' ||
+              p === '/recruit/' ||
+              /^\/(error|404|notfound)/i.test(p);
+            if (isMain) return false;
+          }
+        } catch {
+          return false;
+        }
+        return true;
+      }
+
+      if (res.status < 200 || res.status >= 300) {
+        void res.body?.cancel().catch(() => undefined);
+        return false;
+      }
+
+      // 2xx — body 키워드 검사로 SPA 'not found' / 운영 종료 안내 페이지를 거른다.
+      let html = '';
+      try {
+        html = (await res.text()).toLowerCase();
+      } catch {
+        return true; // body 못 읽어도 status 2xx면 alive 인정 (보수적)
+      }
+      const DEAD_PATTERNS = [
+        'page not found',
+        '찾을 수 없',
+        '존재하지 않',
+        '운영 종료',
+        '서비스 종료',
+        '지원이 종료',
+        '채용이 종료',
+        '채용을 종료',
+        'service is not available',
+        'service has ended',
+        '404 error',
+        'error 404',
+      ];
+      if (DEAD_PATTERNS.some((p) => html.includes(p))) return false;
+      return true;
     } catch {
       return false;
     }
