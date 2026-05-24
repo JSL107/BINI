@@ -84,13 +84,12 @@ export function JobImageCarousel({
           });
           return;
         }
-        // 단일 fallback은 imageQueryType='game'일 때만 — 회사명 검색은
-        // 주가 차트/제품 사진 같은 무관 이미지 매칭이 너무 많다 (F1).
-        // 회사명 fallback이 필요한 잡은 detail enrichment를 추가해 채워야 한다.
-        if (fallbackType !== 'game') {
-          setState({ kind: 'placeholder' });
-          return;
-        }
+        // 회사명 fallback도 시도 — 이미 game_images 캐시에 found row가 있으면
+        // 즉시 사용. 캐시 미스 시 서버가 Naver 호출하지만 noise(주가/제품 사진)
+        // 위험이 있다. 그 noise는 (a) Naver community/finance blocklist (이미
+        // 존재), (b) 사용자 신고 루프 (BadImageService) 로 점진적으로 컷한다.
+        // 이 fallback을 완전히 막으면 detail enrichment가 빈 잡들이 통째로
+        // "이미지 없음"으로 떨어져 실 사용자 컴플레인이 더 컸다.
         const single = await fetchGameImage(fallbackQuery, fallbackType);
         if (!alive) return;
         if (single.imageUrl) {
