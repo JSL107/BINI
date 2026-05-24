@@ -168,6 +168,29 @@ export class CompaniesService {
     const externalCareerUrl =
       rows.find((r) => r.companyUrl && r.companyUrl.length > 0)?.companyUrl ?? null;
 
+    // 잡플래닛 평판 캐시 — crawler가 채워두면 회사 페이지 우측 카드로 노출.
+    // status='found' + rating 채워진 경우만 의미 있음.
+    const jp = await this.prisma.jobplanetCompany.findFirst({
+      where: {
+        companyName: { equals: canonicalName, mode: 'insensitive' as const },
+        status: 'found',
+      },
+    });
+    // 외부 URL은 jobplanet 도메인만 허용해 javascript:/data: 같은 위험 스킴이
+    // 응답에 새어 나가지 않게 한다 — 크롤러가 도메인 외 href를 잡는 변형이 생겨도
+    // 응답 시점에 차단.
+    const jpUrl = (() => {
+      if (!jp?.companyUrl) return null;
+      try {
+        const u = new URL(jp.companyUrl);
+        if (u.protocol !== 'https:') return null;
+        if (!/(^|\.)jobplanet\.co\.kr$/i.test(u.hostname)) return null;
+        return u.toString();
+      } catch {
+        return null;
+      }
+    })();
+
     return {
       name: canonicalName,
       logoUrl,
@@ -176,6 +199,15 @@ export class CompaniesService {
       sources,
       externalCareerUrl,
       jobs,
+      jobplanet: jp
+        ? {
+            url: jpUrl,
+            rating: jp.rating,
+            reviewCount: jp.reviewCount,
+            salaryAvg: jp.salaryAvg,
+            fetchedAt: jp.fetchedAt.toISOString(),
+          }
+        : null,
     };
   }
 

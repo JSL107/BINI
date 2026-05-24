@@ -89,6 +89,23 @@ export interface CareerSitesResponse {
 }
 
 /**
+ * 잡플래닛에서 크롤러가 수집한 회사 평판 요약. 회사 페이지에서 우측 카드로 표시.
+ * 모든 필드는 옵션 — 크롤러가 못 채웠거나 페이지에 데이터가 없으면 null.
+ */
+export interface JobplanetSummary {
+  /** 잡플래닛 회사 deep link (검색 페이지 X, 회사 페이지 직접) */
+  url: string | null;
+  /** 0.0–5.0 */
+  rating: number | null;
+  /** 총 기업리뷰 수 */
+  reviewCount: number | null;
+  /** 평균연봉 (만원) */
+  salaryAvg: number | null;
+  /** 마지막 크롤 성공 시각 (ISO 8601) */
+  fetchedAt: string | null;
+}
+
+/**
  * GET /api/companies/by-name?q=<encoded-company-name> 응답.
  * 한 회사의 BINI 통합 잡 목록 + 회사 메타데이터(로고/사진/대표게임/소스/외부 채용 페이지).
  */
@@ -107,6 +124,8 @@ export interface CompanyDetailResponse {
   externalCareerUrl: string | null;
   /** 그 회사의 모든 BINI 잡 (만료 포함, 등록일 desc) */
   jobs: Job[];
+  /** 잡플래닛 평판 요약. 크롤러가 못 채웠으면 null. */
+  jobplanet: JobplanetSummary | null;
 }
 
 /** GET /api/stats 응답. 멀티소스 적재·만료·신규 현황을 요약. */
