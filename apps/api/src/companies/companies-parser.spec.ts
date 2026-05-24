@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseCareerSitesMarkdown } from './companies-parser';
+import { canonicalUrlKey, dedupeCareerSites } from './companies.service';
 
 const markdown = readFileSync(
   join(__dirname, '../../test/fixtures/korea-game-career-sites.md'),
@@ -55,6 +56,20 @@ describe('parseCareerSitesMarkdown', () => {
     expect(sites.some((s) => /programmers\.co\.kr/i.test(s.url))).toBe(false);
   });
 
+  it('extra-career-sites.md 보강 목록도 같은 파서로 파싱된다', () => {
+    const extra = readFileSync(
+      join(__dirname, 'extra-career-sites.md'),
+      'utf-8',
+    );
+    const sites = parseCareerSitesMarkdown(extra);
+    const companies = sites.filter((s) => s.category === 'company');
+    expect(companies.length).toBeGreaterThanOrEqual(30);
+    // 대표 회사 몇 개 샘플 검증
+    expect(companies.some((s) => s.name.includes('엔픽셀'))).toBe(true);
+    expect(companies.some((s) => s.name.includes('라이온하트'))).toBe(true);
+    expect(companies.some((s) => s.name.includes('스튜디오비사이드'))).toBe(true);
+  });
+
   it('크레딧잡은 결과에서 제외한다 (이름/URL 양쪽 모두 차단)', () => {
     const synthetic = `
 ## 자체 채용 사이트 링크
@@ -71,5 +86,62 @@ describe('parseCareerSitesMarkdown', () => {
     // 정상 사이트는 그대로 유지
     expect(sites.some((s) => /정상회사/.test(s.name))).toBe(true);
     expect(sites.some((s) => /정상정보/.test(s.name))).toBe(true);
+  });
+});
+
+describe('canonicalUrlKey', () => {
+  it('http/https, 대소문자, 끝 슬래시, www 차이를 흡수한다', () => {
+    expect(canonicalUrlKey('https://www.example.com/careers/')).toBe(
+      canonicalUrlKey('http://example.com/careers'),
+    );
+    expect(canonicalUrlKey('https://EXAMPLE.com/Path')).toBe('example.com/Path');
+  });
+
+  it('query/hash는 무시한다', () => {
+    expect(canonicalUrlKey('https://a.com/x?q=1#frag')).toBe(
+      canonicalUrlKey('https://a.com/x'),
+    );
+  });
+
+  it('빈 path는 / 로 정규화', () => {
+    expect(canonicalUrlKey('https://a.com')).toBe('a.com/');
+  });
+
+  it('URL 파싱 실패 시 trim+lowercase fallback', () => {
+    expect(canonicalUrlKey('  NOT-A-URL ')).toBe('not-a-url');
+  });
+});
+
+describe('dedupeCareerSites', () => {
+  it('primary가 같은 URL을 가지면 extra는 무시된다', () => {
+    const primary = [
+      { name: '넥슨', url: 'https://career.nexon.com/', category: 'company' as const },
+    ];
+    const extra = [
+      { name: 'NEXON Careers', url: 'http://www.career.nexon.com', category: 'company' as const },
+    ];
+    const merged = dedupeCareerSites(primary, extra);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].name).toBe('넥슨');
+  });
+
+  it('서로 다른 URL은 모두 유지', () => {
+    const merged = dedupeCareerSites(
+      [{ name: 'A', url: 'https://a.com/', category: 'company' }],
+      [{ name: 'B', url: 'https://b.com/', category: 'company' }],
+    );
+    expect(merged).toHaveLength(2);
+  });
+
+  it('extra 내부 중복도 제거', () => {
+    const merged = dedupeCareerSites(
+      [],
+      [
+        { name: 'X1', url: 'https://x.com/recruit', category: 'company' },
+        { name: 'X2', url: 'https://x.com/recruit/', category: 'company' },
+      ],
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0].name).toBe('X1');
   });
 });

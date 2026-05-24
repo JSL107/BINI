@@ -44,7 +44,8 @@ export default async function CompaniesPage() {
           >
             GameForPeople/korea-game-career-site
           </a>{' '}
-          — 마지막 갱신 {new Date(data.fetchedAt).toLocaleString('ko-KR')}
+          + BINI 자체 큐레이션 — 마지막 갱신{' '}
+          {new Date(data.fetchedAt).toLocaleString('ko-KR')}
         </p>
       </header>
 
