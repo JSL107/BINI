@@ -31,6 +31,9 @@ export default async function CompaniesPage() {
         <a href="/stats" className="text-gray-600 hover:text-gray-900 hover:underline">
           통계
         </a>
+        <a href="/portfolio" className="text-gray-600 hover:text-gray-900 hover:underline">
+          포트폴리오
+        </a>
       </nav>
       <header className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">게임 회사 채용 페이지</h1>
