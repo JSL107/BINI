@@ -1,9 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { JobDetailExtract } from './gamejob-detail-parser';
+import { BROWSER_UA } from './http-constants';
 
 const FETCH_TIMEOUT_MS = 8_000;
-const UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
 /**
  * 원티드 잡 상세 API를 조회해 회사 로고 / 잡 키비주얼 / 회사 사진을 추출.
@@ -72,7 +71,7 @@ export class WantedDetailService {
       const res = await fetch(url, {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         headers: {
-          'User-Agent': UA,
+          'User-Agent': BROWSER_UA,
           Accept: 'application/json',
           'Accept-Language': 'ko-KR,ko;q=0.9',
         },

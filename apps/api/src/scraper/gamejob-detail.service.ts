@@ -4,6 +4,7 @@ import {
   parseJobDetail,
   type JobDetailExtract,
 } from './gamejob-detail-parser';
+import { BROWSER_UA } from './http-constants';
 
 const EMPTY: JobDetailExtract = {
   companyLogoUrl: null,
@@ -13,9 +14,6 @@ const EMPTY: JobDetailExtract = {
 };
 
 const FETCH_TIMEOUT_MS = 8_000;
-
-const UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
 @Injectable()
 export class GamejobDetailService {
@@ -44,7 +42,7 @@ export class GamejobDetailService {
       const res = await fetch(url, {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         headers: {
-          'User-Agent': UA,
+          'User-Agent': BROWSER_UA,
           'Accept-Language': 'ko-KR,ko;q=0.9',
         },
       });
@@ -65,7 +63,7 @@ export class GamejobDetailService {
       const res = await fetch(url, {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         headers: {
-          'User-Agent': UA,
+          'User-Agent': BROWSER_UA,
           'Accept-Language': 'ko-KR,ko;q=0.9',
           Referer: `https://www.gamejob.co.kr/Recruit/GI_Read/View?GI_No=${encodeURIComponent(jobId)}`,
         },

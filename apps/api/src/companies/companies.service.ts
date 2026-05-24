@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { CareerSiteLink, CareerSitesResponse } from '@bini/types';
 import { parseCareerSitesMarkdown } from './companies-parser';
+import { BROWSER_UA } from '../scraper/http-constants';
 
 const README_URL =
   'https://raw.githubusercontent.com/GameForPeople/korea-game-career-site/master/README.md';
@@ -8,8 +9,6 @@ const SOURCE_ID = 'github:GameForPeople/korea-game-career-site';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const PING_TIMEOUT_MS = 4_000;
 const PING_CONCURRENCY = 30;
-const PING_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
 function isSafeHostname(hostname: string): boolean {
   // IPv4 literal check
@@ -110,6 +109,8 @@ export class CompaniesService {
     const alive = sites.filter((_, i) => flags[i]);
     const dead = sites.length - alive.length;
     if (dead > 0) {
+      const deadList = sites.filter((_, i) => !flags[i]).map((s) => `${s.name}=${s.url}`);
+      this.logger.debug(`dead URLs: ${deadList.join(', ')}`);
       this.logger.log(`Career sites dead filter: ${dead}건 제외, ${alive.length}건 유지`);
     }
     return [...alive];
@@ -126,7 +127,7 @@ export class CompaniesService {
         redirect: 'manual',
         signal: AbortSignal.timeout(PING_TIMEOUT_MS),
         headers: {
-          'User-Agent': PING_UA,
+          'User-Agent': BROWSER_UA,
           Accept:
             'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': 'ko-KR,ko;q=0.9',
