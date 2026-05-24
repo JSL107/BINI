@@ -60,6 +60,13 @@ export function JobImageCarousel({
           });
           return;
         }
+        // 단일 fallback은 imageQueryType='game'일 때만 — 회사명 검색은
+        // 주가 차트/제품 사진 같은 무관 이미지 매칭이 너무 많다 (F1).
+        // 회사명 fallback이 필요한 잡은 detail enrichment를 추가해 채워야 한다.
+        if (fallbackType !== 'game') {
+          setState({ kind: 'placeholder' });
+          return;
+        }
         const single = await fetchGameImage(fallbackQuery, fallbackType);
         if (!alive) return;
         if (single.imageUrl) {
