@@ -11,6 +11,28 @@ const PING_CONCURRENCY = 30;
 const PING_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
+function isSafeHostname(hostname: string): boolean {
+  // IPv4 literal check
+  const v4 = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (v4) {
+    const [a, b] = v4.slice(1).map(Number);
+    if (a === 10) return false;                          // 10.0.0.0/8
+    if (a === 127) return false;                         // 127.0.0.0/8 loopback
+    if (a === 169 && b === 254) return false;            // 169.254.0.0/16 link-local
+    if (a === 172 && b >= 16 && b <= 31) return false;  // 172.16.0.0/12
+    if (a === 192 && b === 168) return false;            // 192.168.0.0/16
+    return true;
+  }
+  // IPv6 bracketed literal (e.g. [::1], [fc00::1])
+  if (hostname.startsWith('[') && hostname.endsWith(']')) return false;
+  // Hostname strings
+  const low = hostname.toLowerCase();
+  if (low === 'localhost') return false;
+  if (low.endsWith('.local')) return false;
+  if (low.endsWith('.internal')) return false;
+  return true;
+}
+
 @Injectable()
 export class CompaniesService {
   private readonly logger = new Logger(CompaniesService.name);
@@ -18,16 +40,28 @@ export class CompaniesService {
 
   async getCareerSites(): Promise<CareerSitesResponse> {
     const now = Date.now();
-    if (this.cached && this.cached.expiresAt > now) {
-      return this.cached.response;
-    }
+    if (this.cached && this.cached.expiresAt > now) return this.cached.response;
+
     const parsed = await this.fetchAndParse();
     const alive = await this.filterAlive(parsed);
+
     const response: CareerSitesResponse = {
       sites: alive,
       source: SOURCE_ID,
       fetchedAt: new Date(now).toISOString(),
     };
+
+    // README 일시 장애 또는 전체 사이트 dead 판정 시 캐시에 빈 결과를 굳히지 않는다.
+    // 기존 캐시가 있으면 grace TTL 동안 유지.
+    if (alive.length === 0 && this.cached) {
+      this.logger.warn('Career sites refresh가 빈 결과 — 기존 캐시 grace 유지');
+      return this.cached.response;
+    }
+    if (alive.length === 0) {
+      // 첫 시도에 빈 결과 → 캐시 굳히지 않음 (다음 요청 재시도)
+      return response;
+    }
+
     this.cached = { response, expiresAt: now + CACHE_TTL_MS };
     return response;
   }
@@ -83,9 +117,13 @@ export class CompaniesService {
 
   private async pingAlive(url: string): Promise<boolean> {
     try {
+      const u = new URL(url);
+      if (u.protocol !== 'https:') return false;
+      if (!isSafeHostname(u.hostname)) return false;
+
       const res = await fetch(url, {
         method: 'GET',
-        redirect: 'follow',
+        redirect: 'manual',
         signal: AbortSignal.timeout(PING_TIMEOUT_MS),
         headers: {
           'User-Agent': PING_UA,
