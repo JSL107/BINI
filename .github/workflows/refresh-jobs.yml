@@ -1,0 +1,48 @@
+name: refresh-jobs
+
+# 3시간마다 잡 스크래퍼(NestJS) cron 진입점을 실행해 DB에 적재한다.
+# 사용자 응답 경로(Vercel api)는 DB만 조회하므로 함수 timeout 위험이 없다.
+# 이미지 검색은 별도 워크플로(`refresh-images.yml`)가 담당한다.
+
+on:
+  schedule:
+    # UTC '0 */3 * * *' = 3시간마다 정각. GitHub Actions cron은 5~15분 지연 가능(러너 부하).
+    - cron: '0 */3 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build shared types
+        run: pnpm --filter @bini/types build
+
+      - name: Prisma generate
+        run: pnpm --filter api exec prisma generate
+
+      - name: Build api (compiles src/scripts/cron-jobs.ts → dist/src/scripts/cron-jobs.js)
+        run: pnpm --filter api build
+
+      - name: Run cron-jobs
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # 안전 상한 — 신규 비율이 낮으면 early-stop이 더 빨리 끊는다.
+          CRON_MAX_PAGES: '20'
+          # 한 페이지에서 신규 잡 비율이 이 값 미만이면 다음 페이지 진행 중단 (page 1 제외).
+          CRON_EARLY_STOP_THRESHOLD: '0.2'
+        run: node apps/api/dist/src/scripts/cron-jobs.js

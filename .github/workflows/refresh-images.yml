@@ -1,0 +1,46 @@
+name: refresh-images
+
+on:
+  schedule:
+    # Every 3 hours (UTC)
+    - cron: '0 */3 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Install Chromium
+        run: pnpm --filter crawler exec playwright install --with-deps chromium
+
+      - name: Run image crawler
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CRAWLER_MAX_QUERIES: '500'
+        run: pnpm --filter crawler crawl
+
+      - name: Run namuwiki crawler
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NAMUWIKI_MAX_TARGETS: '300'
+        run: pnpm --filter crawler crawl:namuwiki
+
+      - name: Mark expired jobs
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: pnpm --filter crawler expire

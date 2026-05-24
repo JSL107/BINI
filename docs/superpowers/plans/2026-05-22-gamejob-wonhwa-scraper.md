@@ -6,7 +6,7 @@
 
 **Architecture:** pnpm 모노레포. NestJS API가 게임잡을 실시간 스크래핑해 Postgres에 upsert하고 REST로 제공한다. Next.js 웹이 공고 목록을 서버에서 받아 즉시 렌더하고, 게임 이미지는 카드별로 비동기 로딩한다. 외부 HTML 의존(게임잡·네이버)은 순수 파서 함수로 격리해 픽스처 기반으로 테스트한다.
 
-**Tech Stack:** NestJS 10, Prisma 5, Vercel Postgres(PostgreSQL), cheerio, Next.js 15(App Router), TypeScript, Jest(api), Vitest + React Testing Library(web), pnpm workspaces.
+**Tech Stack:** NestJS 10, Prisma 7 (driver-adapter 아키텍처, `prisma-client` 제너레이터, `prisma.config.ts`), Vercel Postgres(PostgreSQL), cheerio, Next.js 15(App Router), TypeScript, Jest(api), Vitest + React Testing Library(web), pnpm workspaces.
 
 **관련 문서:** 설계서 `docs/superpowers/specs/2026-05-22-gamejob-wonhwa-scraper-design.md`
 
@@ -89,7 +89,7 @@ Expected: 8.x 이상 버전 출력. 없으면 `npm install -g pnpm` 후 재실�
   "devDependencies": {
     "typescript": "^5.4.0"
   },
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=20", "pnpm": ">=8" }
 }
 ```
 
@@ -105,13 +105,11 @@ packages:
 auto-install-peers=true
 ```
 
-`tsconfig.base.json`:
+`tsconfig.base.json` (앱·패키지가 공통으로 상속하는 보편 옵션만 둔다. `module`/`moduleResolution`은 패키지마다 다르므로 베이스에 두지 않고 각 `tsconfig.json`에서 지정):
 ```json
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
-    "moduleResolution": "node",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -149,16 +147,27 @@ git commit -m "chore: scaffold pnpm monorepo root"
   "version": "0.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": { "build": "tsc -p tsconfig.json" },
   "devDependencies": { "typescript": "^5.4.0" }
 }
 ```
 
-`packages/types/tsconfig.json`:
+`packages/types/tsconfig.json` (`@bini/types`는 CommonJS로 컴파일해 NestJS·Next.js 양쪽에서 소비 가능하게 한다):
 ```json
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": "src" },
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "rootDir": "src"
+  },
   "include": ["src"]
 }
 ```
@@ -231,10 +240,10 @@ Expected: `apps/api/package.json`에 `cheerio`, `@bini/types` 추가.
 
 - [ ] **Step 3: CORS 활성화**
 
-`apps/api/src/main.ts`의 `bootstrap()` 안 `app.listen` 직전에 추가:
+`apps/api/src/main.ts`의 `bootstrap()` 안 `app.listen` 직전에 추가 (`setGlobalPrefix`를 먼저 호출하는 것이 NestJS 관용. CORS 폴백은 와일드카드 대신 로컬 웹 출처로):
 ```ts
-app.enableCors({ origin: process.env.WEB_ORIGIN ?? '*' });
 app.setGlobalPrefix('api');
+app.enableCors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000' });
 ```
 
 - [ ] **Step 4: 부팅 & 테스트 검증**
@@ -253,8 +262,11 @@ git commit -m "feat: scaffold NestJS api app"
 
 ### Task 4: Prisma 설정 & 스키마
 
+> **구현 메모:** 실제 설치 시 Prisma 7이 설치되었다. Prisma 7은 (1) `schema.prisma`의 `datasource`에서 `url`을 제거하고 `prisma.config.ts`로 옮기며, (2) `prisma-client` 제너레이터로 클라이언트를 `apps/api/generated/prisma/`(gitignore)에 생성하고, (3) `PrismaService`가 `@prisma/adapter-pg` 드라이버 어댑터를 사용한다. 아래 Step 3·5 코드 블록은 Prisma 5 기준 원안이며 실제 구현은 Prisma 7 방식이다. `prisma.config.ts`/`prisma.service.ts`는 머신 고유 연결문자열을 하드코딩하지 않고 `DATABASE_URL`만 사용한다(런타임은 미설정 시 fail-loud). `apps/api/package.json`에 `postinstall: prisma generate`를 두어 프레시 클론·CI에서 클라이언트가 재생성되게 한다. 모든 `DateTime` 컬럼은 `@db.Timestamptz(3)`로 타임존을 보존한다(설계서 6절 — 등록일순 정렬 정확성). `prisma.config.ts`는 `DATABASE_URL` 미설정 시 명확히 throw한다(CLI 경로도 fail-loud). `PrismaService`는 `OnModuleDestroy`로 `$disconnect()`한다. `dotenv`·`@types/pg`는 devDependencies에 둔다.
+
 **Files:**
-- Create: `apps/api/prisma/schema.prisma`, `apps/api/src/prisma/prisma.service.ts`, `apps/api/src/prisma/prisma.module.ts`, `apps/api/.env`, `apps/api/.env.example`
+- Create: `apps/api/prisma/schema.prisma`, `apps/api/prisma.config.ts`, `apps/api/src/prisma/prisma.service.ts`, `apps/api/src/prisma/prisma.module.ts`, `apps/api/.env`, `apps/api/.env.example`
+- Modify: `apps/api/src/app.module.ts`, `apps/api/package.json`
 
 - [ ] **Step 1: Prisma 설치 & 초기화**
 
@@ -466,7 +478,7 @@ function isNonGame(bracket: string): boolean {
   if (t.length === 0) return true;
   if (GENERIC_TERMS.some((w) => t === w.toLowerCase())) return true;
   if (GENRE_TERMS.some((w) => t.includes(w))) return true;
-  if (PLATFORM_REGION_EMPLOYMENT.some((w) => t.includes(w))) return true;
+  if (PLATFORM_REGION_EMPLOYMENT.some((w) => t === w.toLowerCase())) return true; // 정확 매칭 — '모바일'이 '던파모바일2D'를 오탐하지 않도록
   if (ORG_SUFFIXES.some((w) => t.endsWith(w))) return true;
   if (t.includes('/')) return true; // "부산/인턴" 같은 복합 태그
   return false;
@@ -639,6 +651,8 @@ git commit -m "chore: capture gamejob wonhwa list fixture and request notes"
 ---
 
 ### Task 8: 게임잡 파서 & 스크래퍼 서비스
+
+> **구현 메모 (Task 7 조사 반영):** 요청·선택자의 사실 소스는 `docs/superpowers/scraping-notes.md`다. 핵심: 원화 목록은 GET이 아니라 **`POST https://www.gamejob.co.kr/Recruit/_GI_Job_List/`** (본문 `condition[duty]=5&page=N&order=3&pagesize=40&tabcode=1`, `Content-Type: application/x-www-form-urlencoded; charset=UTF-8`, `X-Requested-With: XMLHttpRequest`, 쿠키 불필요)로 가져온다. 페이지네이션은 본문 `page` 값을 바꿔 호출(GET `?Page=N`은 필터가 풀리므로 쓰지 않음). 행 구조: `table.tblList > tbody > tr`. 총 페이지 수는 `<span class="totalJobcnt">(266)</span>`를 읽어 `ceil(n/40)`로 계산. 픽스처는 `apps/api/test/fixtures/gamejob-wonhwa-list.html`(40행). 아래 Step 3·5 코드의 `ROW_SELECTOR`/`buildUrl` 등 원안은 scraping-notes.md 기준으로 대체된다.
 
 **Files:**
 - Create: `apps/api/src/scraper/gamejob-parser.ts`, `apps/api/src/scraper/gamejob-scraper.service.ts`, `apps/api/src/scraper/scraper.module.ts`
@@ -897,6 +911,8 @@ git commit -m "chore: capture naver image search fixture and notes"
 ---
 
 ### Task 10: 게임 이미지 서비스 (동시성 제한 포함)
+
+> **구현 메모 (Task 9 조사 반영):** 네이버 이미지 검색 결과는 `<img>` 태그가 아니라 HTML 임베드 JSON의 `"originalUrl":"<url>"` 필드에 있다(`docs/superpowers/scraping-notes.md` 네이버 절 참조). 따라서 `parseFirstImageUrl`은 cheerio `IMAGE_SELECTOR`가 아니라 **정규식** `"originalUrl":"([^"]+)"` 첫 매치를 추출하고 JSON 이스케이프를 해제한다. 없으면 `null`. 픽스처: `apps/api/test/fixtures/naver-image-search.html`. 아래 Step 7의 `naver-image.ts` cheerio 원안은 정규식 방식으로 대체된다.
 
 **Files:**
 - Create: `apps/api/src/image/limit.ts`, `apps/api/src/image/image-provider.ts`, `apps/api/src/image/naver-image.ts`, `apps/api/src/image/game-image.service.ts`, `apps/api/src/image/image.module.ts`
@@ -2153,8 +2169,8 @@ import type { INestApplication } from '@nestjs/common';
 
 export async function createApp(): Promise<INestApplication> {
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: process.env.WEB_ORIGIN ?? '*' });
   app.setGlobalPrefix('api');
+  app.enableCors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000' });
   return app;
 }
 
@@ -2206,6 +2222,7 @@ export default handler;
 `docs/superpowers/scraping-notes.md` 또는 `README.md`에 배포 절차 기록:
 - Vercel 프로젝트 2개 생성 (api / web), 각각 Root Directory를 `apps/api` / `apps/web`로 지정
 - api 프로젝트: `DATABASE_URL`, `WEB_ORIGIN` 환경변수 설정, Vercel Postgres 연결
+  - ⚠️ 서버리스 환경: `DATABASE_URL`은 **풀링된(pooled) 연결 문자열**을 사용한다 (Vercel Postgres/Neon의 pooler 엔드포인트). 함수 인스턴스마다 풀이 생기므로 직접 연결을 쓰면 커넥션 한도가 빠르게 소진된다.
 - web 프로젝트: `NEXT_PUBLIC_API_BASE_URL`을 배포된 api URL로 설정
 - api 배포 후 `prisma migrate deploy` 실행
 

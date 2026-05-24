@@ -1,0 +1,24 @@
+{
+  "name": "crawler",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node --import tsx/esm src/index.ts",
+    "crawl": "node --import tsx/esm src/index.ts",
+    "crawl:namuwiki": "node --import tsx/esm src/namuwiki-main.ts",
+    "expire": "node --import tsx/esm src/expire.ts",
+    "install:chromium": "playwright install --with-deps chromium"
+  },
+  "dependencies": {
+    "pg": "^8.13.0",
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.0"
+  }
+}
