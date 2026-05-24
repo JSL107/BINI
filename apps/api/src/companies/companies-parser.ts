@@ -80,5 +80,8 @@ function isDeadSite(name: string, url: string): boolean {
   // 프로그래머스 채용은 2024년 서비스 종료(career.programmers.co.kr 도메인 자체가 만료).
   if (/프로그래머스/.test(name)) return true;
   if (lowerUrl.includes('career.programmers')) return true;
+  // 크레딧잡 — 사용자 요청으로 목록에서 제외 (이름/도메인 양쪽 모두 매칭).
+  if (/크레딧잡|kreditjob|creditjob/i.test(name)) return true;
+  if (/kreditjob|creditjob/i.test(lowerUrl)) return true;
   return false;
 }
