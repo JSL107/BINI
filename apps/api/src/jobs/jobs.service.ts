@@ -1,5 +1,5 @@
 import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
-import type { Job, JobSource, JobsResponse } from '@bini/types';
+import type { JobSource, JobsResponse } from '@bini/types';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { WantedScraperService } from '../scraper/wanted-scraper.service';
 import { JobkoreaScraperService } from '../scraper/jobkorea-scraper.service';
@@ -11,7 +11,16 @@ import { parseRelativeTime } from '../time/relative-time';
 import type { JobScraper } from '../scraper/scraper.interface';
 import type { RawJob } from '../scraper/raw-job';
 import { dedupeJobs, type DedupedJob } from './dedupe';
+import { computeAttributes } from './job-attributes';
+import { toJobDto } from './jobs-cron.service';
 
+/**
+ * @deprecated 사용자 응답 경로는 JobsCronService.getJobsFromDb를 사용한다.
+ * 이 서비스의 getJobsPage는 컨트롤러에서 더 이상 호출되지 않으며, 통합 테스트 호환을 위해서만 유지된다.
+ *
+ * 주의: 이 메서드는 alias/primary 영속화를 수행하지 않는다. dedup은 메모리에서만 합성되고
+ * `primaryJobId` 컬럼은 건드리지 않는다 (기존 값 보존). 운영용으로는 절대 호출하지 말 것.
+ */
 @Injectable()
 export class JobsService {
   private readonly logger = new Logger(JobsService.name);
@@ -29,6 +38,8 @@ export class JobsService {
   }
 
   /**
+   * @deprecated 사용자 응답 경로가 아님 — JobsCronService.getJobsFromDb를 사용할 것.
+   *
    * 등록된 모든 스크래퍼를 병렬 호출 → dedup → 단일 트랜잭션 upsert → 등록일순 반환.
    * 일부 소스 실패는 failedSources 메타로 노출(부분 성공 허용),
    * 전체 실패만 BadGateway로 fail-loud.
@@ -65,6 +76,7 @@ export class JobsService {
     const upserts = deduped.map((raw) => {
       const parsed = parseTitle(raw.title, raw.company);
       const registeredAt = parseRelativeTime(raw.registeredAtText, now);
+      const attrs = computeAttributes(raw.tags, raw.title);
       const id = `${raw.source}:${raw.sourceId}`;
       // registeredAt은 create에만 둔다 — 재스크래핑 시 상대시간 재계산값으로
       // 최초 등록시각을 덮어쓰면 정렬이 흔들리기 때문.
@@ -80,6 +92,11 @@ export class JobsService {
         gameTitle: parsed.gameTitle,
         imageQuery: parsed.imageQuery,
         imageQueryType: parsed.imageQueryType,
+        normalizedKey: raw.normalizedKey,
+        experienceLevel: attrs.experienceLevel,
+        employmentType: attrs.employmentType,
+        locations: attrs.locations,
+        isRemote: attrs.isRemote,
       };
       return this.prisma.job.upsert({
         where: { id },
@@ -108,68 +125,10 @@ export class JobsService {
       altMap.set(`${d.source}:${d.sourceId}`, d.alternateSources);
     }
 
-    const jobs = rows.map((row) =>
-      toJobDto(row, altMap.get(row.id) ?? []),
-    );
+    const jobs = rows.map((row) => toJobDto(row, altMap.get(row.id) ?? []));
 
     const response: JobsResponse = { page, totalPages: maxTotalPages, jobs };
     if (failedSources.length > 0) response.failedSources = failedSources;
     return response;
   }
-}
-
-function isJobSource(s: string): s is JobSource {
-  return (
-    s === 'gamejob' ||
-    s === 'wanted' ||
-    s === 'jobkorea' ||
-    s === 'saramin' ||
-    s === 'incruit'
-  );
-}
-
-const EXPIRY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-
-function toJobDto(
-  row: {
-    id: string; source: string; company: string; companyUrl: string;
-    title: string; detailUrl: string; deadline: string; registeredAt: Date;
-    tags: string[]; gameTitle: string | null; imageQuery: string;
-    imageQueryType: string;
-    companyLogoUrl: string | null; companyPhotos: string[]; representativeGames: string[];
-    lastSeenAt?: Date | null; expiredAt?: Date | null;
-  },
-  alternateSources: DedupedJob['alternateSources'],
-): Job {
-  const imageQueryType: Job['imageQueryType'] =
-    row.imageQueryType === 'game' ? 'game' : 'company';
-  const source: JobSource = isJobSource(row.source) ? row.source : 'gamejob';
-  return {
-    id: row.id,
-    source,
-    company: row.company,
-    companyUrl: row.companyUrl,
-    title: row.title,
-    detailUrl: row.detailUrl,
-    deadline: row.deadline,
-    registeredAt: row.registeredAt.toISOString(),
-    tags: row.tags,
-    gameTitle: row.gameTitle,
-    imageQuery: row.imageQuery,
-    imageQueryType,
-    alternateSources,
-    companyLogoUrl: row.companyLogoUrl,
-    companyPhotos: row.companyPhotos,
-    representativeGames: row.representativeGames,
-    expired: computeExpired(row.expiredAt ?? null, row.lastSeenAt ?? null),
-  };
-}
-
-function computeExpired(
-  expiredAt: Date | null,
-  lastSeenAt: Date | null,
-): boolean {
-  if (expiredAt) return true;
-  if (!lastSeenAt) return false;
-  return Date.now() - lastSeenAt.getTime() > EXPIRY_WINDOW_MS;
 }

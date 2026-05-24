@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Job, JobSource, JobsResponse } from '@bini/types';
+import type {
+  EmploymentType,
+  ExperienceLevel,
+  Job,
+  JobSource,
+  JobsResponse,
+} from '@bini/types';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { GamejobDetailService } from '../scraper/gamejob-detail.service';
 import { WantedScraperService } from '../scraper/wanted-scraper.service';
@@ -15,7 +21,8 @@ import { parseTitle } from '../title/title-parser';
 import { parseRelativeTime } from '../time/relative-time';
 import type { JobScraper } from '../scraper/scraper.interface';
 import type { RawJob } from '../scraper/raw-job';
-import { dedupeJobs } from './dedupe';
+import { groupRawJobs } from './dedupe';
+import { computeAttributes } from './job-attributes';
 
 /** lastSeenAt이 이 값을 넘은 잡은 expired로 간주 (sweepExpired 임계값 + computeExpired 동적 계산 기준). */
 const EXPIRY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -46,14 +53,17 @@ export interface ScrapeResult {
   totalFailure: boolean;
 }
 
-/**
- * 사용자 요청 경로(JobsService.getJobsPage)와 cron 경로를 분리하기 위해 도입된 서비스.
- * - 사용자 요청: getJobsFromDb — DB만 조회. Vercel 함수 timeout 안전.
- * - cron(GitHub Actions): scrapeAndUpsert + sweepExpired — 외부 스크래퍼 호출 포함.
- *
- * 기존 JobsService는 통합 테스트 호환을 위해 유지하되, 사용자 요청 경로의 Controller는
- * 이 서비스의 getJobsFromDb를 호출하도록 전환한다.
- */
+/** 사용자 응답 경로(getJobsFromDb)에 적용되는 필터 옵션. 모든 항목 optional, OR 아닌 AND 결합. */
+export interface JobsQuery {
+  search?: string;
+  experience?: ExperienceLevel[];
+  employmentType?: EmploymentType[];
+  /** 시도 라벨 문자열 배열. 빈 배열이면 필터 없음. */
+  location?: string[];
+  /** true일 때만 isRemote=true인 잡만. false/undefined면 무필터. */
+  remote?: boolean;
+}
+
 /** detail fetcher 시그니처 — `JobDetailExtract`를 반환하는 source별 어댑터. */
 interface JobDetailFetcher {
   fetchDetail(sourceId: string): Promise<JobDetailExtract>;
@@ -88,8 +98,14 @@ export class JobsCronService {
   }
 
   /**
-   * cron 전용. 모든 스크래퍼를 병렬 호출 → dedup → DB upsert. 응답 합성은 안 한다.
-   * 전체 실패해도 throw하지 않고 totalFailure=true로 반환 → cron이 다음 페이지 시도를 멈추도록.
+   * cron 전용. 모든 스크래퍼를 병렬 호출 → group → DB primary 영속화 + upsert.
+   * 응답 합성은 안 한다. 전체 실패해도 throw하지 않고 totalFailure=true로 반환.
+   *
+   * dedup 영속화:
+   *  - normalizedKey(company+title) 동일 잡들이 같은 primary를 공유하도록 cron마다 정렬.
+   *  - DB에 같은 키의 primary(primaryJobId IS NULL)가 이미 있으면 그 잡이 권위자.
+   *    이번 페이지의 잡들은 모두 그 잡의 alias로 upsert(primaryJobId 설정).
+   *  - 없으면 group 첫 등장 잡이 새 primary가 된다.
    */
   async scrapeAndUpsert(page: number): Promise<ScrapeResult> {
     const settled = await Promise.allSettled(
@@ -123,47 +139,100 @@ export class JobsCronService {
       };
     }
 
-    const deduped = dedupeJobs(allRaw);
-    const ids = deduped.map((d) => `${d.source}:${d.sourceId}`);
+    const groups = groupRawJobs(allRaw);
+
+    // 영속화된 primary 조회 — 같은 normalizedKey의 잡이 이미 DB에 primary로 있으면 우선.
+    // 단, 만료된 primary는 후보에서 제외 — 새 잡들을 죽은 primary에 묶지 않기 위해.
+    // 만료된 primary가 있고 같은 키의 활성 잡이 새로 들어오면 새 잡이 primary가 된다.
+    const keys = groups.map((g) => g.normalizedKey);
+    const existingPrimaries =
+      keys.length > 0
+        ? await this.prisma.job.findMany({
+            where: {
+              normalizedKey: { in: keys },
+              primaryJobId: null,
+              expiredAt: null,
+            },
+            select: { id: true, normalizedKey: true },
+          })
+        : [];
+    const primaryByKey = new Map<string, string>();
+    for (const p of existingPrimaries) {
+      if (p.normalizedKey) primaryByKey.set(p.normalizedKey, p.id);
+    }
 
     // newCount 산정 — Prisma upsert는 created/updated 구분을 반환하지 않으므로
     // upsert 전에 select 한 번으로 신규 비율을 계산한다 (early-stop 입력).
+    const allMemberIds = groups.flatMap((g) =>
+      g.members.map((m) => `${m.source}:${m.sourceId}`),
+    );
     let newCount = 0;
-    if (ids.length > 0) {
+    if (allMemberIds.length > 0) {
       const existing = await this.prisma.job.findMany({
-        where: { id: { in: ids } },
+        where: { id: { in: allMemberIds } },
         select: { id: true },
       });
       const existingSet = new Set(existing.map((e) => e.id));
-      newCount = ids.filter((id) => !existingSet.has(id)).length;
+      newCount = allMemberIds.filter((id) => !existingSet.has(id)).length;
     }
 
     const now = new Date();
-    const upserts = deduped.map((raw) => {
-      const parsed = parseTitle(raw.title, raw.company);
-      const registeredAt = parseRelativeTime(raw.registeredAtText, now);
-      const id = `${raw.source}:${raw.sourceId}`;
-      // registeredAt은 create에만 둔다 — 재스크래핑 시 상대시간 재계산값으로
-      // 최초 등록시각을 덮어쓰면 정렬이 흔들리기 때문.
-      const common = {
-        source: raw.source,
-        sourceId: raw.sourceId,
-        company: raw.company,
-        companyUrl: raw.companyUrl,
-        title: raw.title,
-        detailUrl: raw.detailUrl,
-        deadline: raw.deadline,
-        tags: raw.tags,
-        gameTitle: parsed.gameTitle,
-        imageQuery: parsed.imageQuery,
-        imageQueryType: parsed.imageQueryType,
-      };
-      return this.prisma.job.upsert({
-        where: { id },
-        create: { id, ...common, registeredAt },
-        update: { ...common, lastSeenAt: now, expiredAt: null },
+    const upserts: Array<ReturnType<PrismaService['job']['upsert']>> = [];
+    let dedupedCount = 0;
+
+    for (const group of groups) {
+      dedupedCount += 1;
+      // 새 primary 후보(이번 cron의 group 첫 등장)와 기존 DB primary 중 후자 우선.
+      const newPrimaryId = `${group.primary.source}:${group.primary.sourceId}`;
+      const finalPrimaryId = primaryByKey.get(group.normalizedKey) ?? newPrimaryId;
+
+      // primary upsert가 항상 alias upsert보다 먼저 실행되도록 순서 조정.
+      // 신규 그룹(DB에 같은 키 primary가 없음)에서 첫 member가 finalPrimaryId면 자명히 안전.
+      // 하지만 기존 DB primary가 group 중간에 있는 경우 그 row를 먼저 update해야 FK 시점 안전.
+      const orderedMembers = [...group.members].sort((a, b) => {
+        const aId = `${a.source}:${a.sourceId}`;
+        const bId = `${b.source}:${b.sourceId}`;
+        if (aId === finalPrimaryId) return -1;
+        if (bId === finalPrimaryId) return 1;
+        return 0;
       });
-    });
+
+      for (const member of orderedMembers) {
+        const memberId = `${member.source}:${member.sourceId}`;
+        const isPrimary = memberId === finalPrimaryId;
+        const parsed = parseTitle(member.title, member.company);
+        const registeredAt = parseRelativeTime(member.registeredAtText, now);
+        const attrs = computeAttributes(member.tags, member.title);
+        // registeredAt은 create에만 둔다 — 재스크래핑 시 상대시간 재계산값으로
+        // 최초 등록시각을 덮어쓰면 정렬이 흔들리기 때문.
+        const common = {
+          source: member.source,
+          sourceId: member.sourceId,
+          company: member.company,
+          companyUrl: member.companyUrl,
+          title: member.title,
+          detailUrl: member.detailUrl,
+          deadline: member.deadline,
+          tags: member.tags,
+          gameTitle: parsed.gameTitle,
+          imageQuery: parsed.imageQuery,
+          imageQueryType: parsed.imageQueryType,
+          normalizedKey: group.normalizedKey,
+          primaryJobId: isPrimary ? null : finalPrimaryId,
+          experienceLevel: attrs.experienceLevel,
+          employmentType: attrs.employmentType,
+          locations: attrs.locations,
+          isRemote: attrs.isRemote,
+        };
+        upserts.push(
+          this.prisma.job.upsert({
+            where: { id: memberId },
+            create: { id: memberId, ...common, registeredAt },
+            update: { ...common, lastSeenAt: now, expiredAt: null },
+          }),
+        );
+      }
+    }
 
     if (upserts.length > 0) {
       // 페이지당 dedup된 잡 수십~수백 건 × upsert. Prisma 기본 5초 timeout으로는
@@ -172,13 +241,13 @@ export class JobsCronService {
     }
 
     this.logger.log(
-      `page ${page}: ${allRaw.length}건 raw → ${deduped.length}건 dedup → ${newCount}건 신규` +
+      `page ${page}: ${allRaw.length}건 raw → ${dedupedCount}건 dedup → ${newCount}건 신규 (upserted ${upserts.length})` +
         (failedSources.length ? ` (failed: ${failedSources.join(',')})` : ''),
     );
 
     return {
       scrapedCount: allRaw.length,
-      dedupedCount: deduped.length,
+      dedupedCount,
       newCount,
       totalPages: maxTotalPages,
       failedSources,
@@ -188,24 +257,15 @@ export class JobsCronService {
 
   /**
    * 사용자 응답 경로. DB만 조회한다 — 외부 스크래퍼 호출 없음.
-   * expired 잡도 결과에 포함하되 expired:true 플래그로 노출(프론트가 회색 처리 결정).
-   * alternateSources는 dedup 시점 메모리에서만 합성되는 정보라 빈 배열로 둔다.
-   * search가 주어지면 title/company의 부분 일치(대소문자 무시)로 필터링한다.
+   * primaryJobId IS NULL만 노출(alias 잡은 숨김) 하고 그 잡의 aliases를 include로 가져와
+   * Job.alternateSources에 합성한다. expired 잡도 결과에 포함하되 expired:true 플래그로 노출.
    */
   async getJobsFromDb(
     page: number,
     perPage: number = DEFAULT_PER_PAGE,
-    search?: string,
+    opts: JobsQuery = {},
   ): Promise<JobsResponse> {
-    const q = (search ?? '').trim();
-    const where = q
-      ? {
-          OR: [
-            { title: { contains: q, mode: 'insensitive' as const } },
-            { company: { contains: q, mode: 'insensitive' as const } },
-          ],
-        }
-      : undefined;
+    const where = buildJobsWhere(opts);
     const skip = (page - 1) * perPage;
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.job.count({ where }),
@@ -214,10 +274,20 @@ export class JobsCronService {
         orderBy: [{ registeredAt: 'desc' }, { id: 'desc' }],
         skip,
         take: perPage,
+        include: {
+          aliases: {
+            select: { source: true, detailUrl: true },
+          },
+        },
       }),
     ]);
     const totalPages = Math.max(1, Math.ceil(total / perPage));
-    const jobs = rows.map((row) => toJobDto(row));
+    const jobs = rows.map((row) =>
+      toJobDto(row, (row.aliases ?? []).map((a) => ({
+        source: isJobSource(a.source) ? a.source : ('gamejob' as JobSource),
+        detailUrl: a.detailUrl,
+      }))),
+    );
     return { page, totalPages, jobs };
   }
 
@@ -321,6 +391,31 @@ export class JobsCronService {
   }
 }
 
+/** Prisma where 객체를 JobsQuery에서 합성. primaryJobId: null은 항상 강제. */
+export function buildJobsWhere(opts: JobsQuery): Record<string, unknown> {
+  const where: Record<string, unknown> = { primaryJobId: null };
+  const q = (opts.search ?? '').trim();
+  if (q) {
+    where.OR = [
+      { title: { contains: q, mode: 'insensitive' as const } },
+      { company: { contains: q, mode: 'insensitive' as const } },
+    ];
+  }
+  if (opts.experience && opts.experience.length > 0) {
+    where.experienceLevel = { in: opts.experience };
+  }
+  if (opts.employmentType && opts.employmentType.length > 0) {
+    where.employmentType = { in: opts.employmentType };
+  }
+  if (opts.location && opts.location.length > 0) {
+    where.locations = { hasSome: opts.location };
+  }
+  if (opts.remote === true) {
+    where.isRemote = true;
+  }
+  return where;
+}
+
 function isJobSource(s: string): s is JobSource {
   return (
     s === 'gamejob' ||
@@ -331,7 +426,7 @@ function isJobSource(s: string): s is JobSource {
   );
 }
 
-function computeExpired(
+export function computeExpired(
   expiredAt: Date | null,
   lastSeenAt: Date | null,
 ): boolean {
@@ -340,25 +435,52 @@ function computeExpired(
   return Date.now() - lastSeenAt.getTime() > EXPIRY_WINDOW_MS;
 }
 
-function toJobDto(row: {
-  id: string;
-  source: string;
-  company: string;
-  companyUrl: string;
-  title: string;
-  detailUrl: string;
-  deadline: string;
-  registeredAt: Date;
-  tags: string[];
-  gameTitle: string | null;
-  imageQuery: string;
-  imageQueryType: string;
-  companyLogoUrl: string | null;
-  companyPhotos: string[];
-  representativeGames: string[];
-  lastSeenAt?: Date | null;
-  expiredAt?: Date | null;
-}): Job {
+function asExperience(v: string | null | undefined): ExperienceLevel | null {
+  if (v === 'newcomer' || v === 'junior' || v === 'mid' || v === 'senior' || v === 'any') {
+    return v;
+  }
+  return null;
+}
+
+function asEmployment(v: string | null | undefined): EmploymentType | null {
+  if (
+    v === 'fulltime' ||
+    v === 'contract' ||
+    v === 'parttime' ||
+    v === 'freelance' ||
+    v === 'intern'
+  ) {
+    return v;
+  }
+  return null;
+}
+
+export function toJobDto(
+  row: {
+    id: string;
+    source: string;
+    company: string;
+    companyUrl: string;
+    title: string;
+    detailUrl: string;
+    deadline: string;
+    registeredAt: Date;
+    tags: string[];
+    gameTitle: string | null;
+    imageQuery: string;
+    imageQueryType: string;
+    companyLogoUrl: string | null;
+    companyPhotos: string[];
+    representativeGames: string[];
+    lastSeenAt?: Date | null;
+    expiredAt?: Date | null;
+    experienceLevel?: string | null;
+    employmentType?: string | null;
+    locations?: string[];
+    isRemote?: boolean;
+  },
+  alternateSources: Job['alternateSources'] = [],
+): Job {
   const imageQueryType: Job['imageQueryType'] =
     row.imageQueryType === 'game' ? 'game' : 'company';
   const source: JobSource = isJobSource(row.source) ? row.source : 'gamejob';
@@ -375,10 +497,14 @@ function toJobDto(row: {
     gameTitle: row.gameTitle,
     imageQuery: row.imageQuery,
     imageQueryType,
-    alternateSources: [],
+    alternateSources,
     companyLogoUrl: row.companyLogoUrl,
     companyPhotos: row.companyPhotos,
     representativeGames: row.representativeGames,
     expired: computeExpired(row.expiredAt ?? null, row.lastSeenAt ?? null),
+    experienceLevel: asExperience(row.experienceLevel ?? null),
+    employmentType: asEmployment(row.employmentType ?? null),
+    locations: row.locations ?? [],
+    isRemote: row.isRemote ?? false,
   };
 }

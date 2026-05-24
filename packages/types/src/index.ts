@@ -2,6 +2,16 @@ export type ImageQueryType = 'game' | 'company';
 export type ImageStatus = 'found' | 'not_found' | 'error' | 'blocked';
 export type JobSource = 'gamejob' | 'wanted' | 'jobkorea' | 'saramin' | 'incruit';
 
+/** cron 시점에 tags+title에서 추출되는 연차 분류. 매칭 안 되면 null. */
+export type ExperienceLevel = 'newcomer' | 'junior' | 'mid' | 'senior' | 'any';
+/** cron 시점에 tags+title에서 추출되는 고용형태. 매칭 안 되면 null. */
+export type EmploymentType =
+  | 'fulltime'
+  | 'contract'
+  | 'parttime'
+  | 'freelance'
+  | 'intern';
+
 export interface AlternateSource {
   source: JobSource;
   detailUrl: string;
@@ -29,6 +39,14 @@ export interface Job {
   representativeGames: string[];
   /** lastSeenAt + 7일이 경과했거나 cron이 명시적으로 만료 처리한 공고. 프론트가 표시 여부 결정. */
   expired: boolean;
+  /** tags+title 정규화로 cron이 추출한 연차 분류. 없으면 null. */
+  experienceLevel: ExperienceLevel | null;
+  /** tags+title 정규화로 cron이 추출한 고용형태. 없으면 null. */
+  employmentType: EmploymentType | null;
+  /** tags+title에서 추출된 시도 라벨 목록. 다중 가능. */
+  locations: string[];
+  /** tags+title에 재택/원격 키워드가 있으면 true. */
+  isRemote: boolean;
 }
 
 export interface JobsResponse {
@@ -70,6 +88,27 @@ export interface CareerSitesResponse {
   fetchedAt: string; // ISO 8601
 }
 
+/**
+ * GET /api/companies/by-name?q=<encoded-company-name> 응답.
+ * 한 회사의 BINI 통합 잡 목록 + 회사 메타데이터(로고/사진/대표게임/소스/외부 채용 페이지).
+ */
+export interface CompanyDetailResponse {
+  /** 정규화된 회사명 — query와 같거나 trim/space 정규화 결과 */
+  name: string;
+  /** 회사 잡 중 첫 비-null logoUrl. detail enrichment 안 된 회사면 null */
+  logoUrl: string | null;
+  /** 회사 잡들의 companyPhotos 합집합 (dedup) */
+  photos: string[];
+  /** 회사 잡들의 representativeGames 합집합 (dedup) */
+  representativeGames: string[];
+  /** 이 회사가 잡을 올린 소스 목록 (unique) */
+  sources: JobSource[];
+  /** 이 회사의 첫 비-empty companyUrl (외부 채용 페이지) */
+  externalCareerUrl: string | null;
+  /** 그 회사의 모든 BINI 잡 (만료 포함, 등록일 desc) */
+  jobs: Job[];
+}
+
 /** GET /api/stats 응답. 멀티소스 적재·만료·신규 현황을 요약. */
 export interface StatsResponse {
   /** DB의 총 공고 수 */
@@ -90,4 +129,27 @@ export interface StatsResponse {
   lastCronRunAt: string | null;
   /** 응답 생성 시각 */
   generatedAt: string;
+  /**
+   * 최근 12주 신규 공고 추세. weekStart는 ISO date(월요일 시작 또는 DB date_trunc 결과),
+   * count는 해당 주에 firstSeenAt이 찍힌 잡 수. 오름차순(과거→현재).
+   */
+  weeklyTrend: WeeklyTrendPoint[];
+  /** 회사별 누적 공고 top 20. 만료 포함, alias 흡수된 잡(primaryJobId != null)도 모두 카운트. */
+  topCompanies: CompanyCount[];
+  /**
+   * dedup 영속화 후 활성 점유율 — 소스별로 `primaryJobId IS NULL AND expiredAt IS NULL`을
+   * 카운트한 값. 모든 JobSource 키가 항상 존재(0이면 0).
+   */
+  activeBySource: Record<JobSource, number>;
+}
+
+export interface WeeklyTrendPoint {
+  /** 주의 시작일(ISO date, 예: "2026-05-18"). DB의 date_trunc('week', firstSeenAt) 결과. */
+  weekStart: string;
+  count: number;
+}
+
+export interface CompanyCount {
+  company: string;
+  count: number;
 }
