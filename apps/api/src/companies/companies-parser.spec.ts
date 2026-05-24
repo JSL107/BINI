@@ -41,4 +41,17 @@ describe('parseCareerSitesMarkdown', () => {
   it('빈 마크다운은 빈 배열 반환', () => {
     expect(parseCareerSitesMarkdown('')).toEqual([]);
   });
+
+  it('이름에서 "(보 지급)" / "(보너스 지급)" 같은 광고성 꼬리표를 제거한다', () => {
+    const sites = parseCareerSitesMarkdown(markdown);
+    const wanted = sites.find((s) => /원티드/.test(s.name));
+    expect(wanted).toBeDefined();
+    expect(wanted!.name).not.toMatch(/지급|보너스/);
+  });
+
+  it('프로그래머스(career.programmers) 채용은 서비스 종료로 결과에서 제외한다', () => {
+    const sites = parseCareerSitesMarkdown(markdown);
+    expect(sites.some((s) => /프로그래머스/.test(s.name))).toBe(false);
+    expect(sites.some((s) => /programmers\.co\.kr/i.test(s.url))).toBe(false);
+  });
 });
