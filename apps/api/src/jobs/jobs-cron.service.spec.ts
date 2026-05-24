@@ -2,6 +2,7 @@ import { JobsCronService } from './jobs-cron.service';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { GamejobDetailService } from '../scraper/gamejob-detail.service';
 import { WantedScraperService } from '../scraper/wanted-scraper.service';
+import { WantedDetailService } from '../scraper/wanted-detail.service';
 import { JobkoreaScraperService } from '../scraper/jobkorea-scraper.service';
 import { SaraminScraperService } from '../scraper/saramin-scraper.service';
 import { IncruitScraperService } from '../scraper/incruit-scraper.service';
@@ -20,16 +21,17 @@ function build(seed: JobRow[]) {
   const findMany = jest.fn(
     async (args: {
       where: {
-        source: string;
+        source: { in: string[] };
         expiredAt: null;
         OR: Array<{ detailScrapedAt: null } | { detailScrapedAt: { lt: Date } }>;
       };
       take: number;
     }) => {
       const cutoff = (args.where.OR.find((c) => 'detailScrapedAt' in c && c.detailScrapedAt && 'lt' in c.detailScrapedAt) as { detailScrapedAt: { lt: Date } } | undefined)?.detailScrapedAt.lt;
+      const supportedSources = new Set(args.where.source.in);
       const candidates = seed.filter(
         (r) =>
-          r.source === args.where.source &&
+          supportedSources.has(r.source) &&
           r.expiredAt === null &&
           (r.detailScrapedAt === null ||
             (cutoff !== undefined && r.detailScrapedAt < cutoff)),
@@ -47,6 +49,7 @@ function build(seed: JobRow[]) {
       return candidates.slice(0, args.take).map((r) => ({
         id: r.id,
         sourceId: r.sourceId,
+        source: r.source,
       }));
     },
   );
@@ -60,7 +63,17 @@ function build(seed: JobRow[]) {
     representativeGames: ['게임A'],
     bodyImages: ['https://body/x.jpg'],
   }));
-  const detail = { fetchDetail } as unknown as GamejobDetailService;
+  const gamejobDetail = { fetchDetail } as unknown as GamejobDetailService;
+  // wanted fetcher — 기본은 호출되어도 빈 결과. 일부 테스트에서 mockResolvedValueOnce로 override.
+  const wantedFetchDetail = jest.fn(async (_id: string) => ({
+    companyLogoUrl: null,
+    companyPhotos: [],
+    representativeGames: [],
+    bodyImages: [],
+  }));
+  const wantedDetail = {
+    fetchDetail: wantedFetchDetail,
+  } as unknown as WantedDetailService;
   const stub = {} as unknown;
   const service = new JobsCronService(
     stub as GamejobScraperService,
@@ -69,36 +82,44 @@ function build(seed: JobRow[]) {
     stub as SaraminScraperService,
     stub as IncruitScraperService,
     prisma,
-    detail,
+    gamejobDetail,
+    wantedDetail,
   );
-  return { service, findMany, update, fetchDetail };
+  return { service, findMany, update, fetchDetail, wantedFetchDetail };
 }
 
 describe('JobsCronService.rescrapeStaleDetails', () => {
   const day = 24 * 60 * 60 * 1000;
   const now = Date.now();
 
-  it('detailScrapedAt null 잡과 1일 넘은 잡을 대상에 포함, 만료/타 소스는 제외', async () => {
-    const { service, fetchDetail, update } = build([
-      // 대상: detail 없음
+  it('gamejob/wanted detailScrapedAt null/stale 잡을 포함, 만료/unsupported source는 제외', async () => {
+    const { service, fetchDetail, wantedFetchDetail, update } = build([
+      // 대상: gamejob, detail 없음
       { id: 'gamejob:1', sourceId: '1', source: 'gamejob', expiredAt: null, detailScrapedAt: null, registeredAt: new Date(now - 1000) },
-      // 대상: 2일 전 detail
+      // 대상: gamejob, 2일 전 detail
       { id: 'gamejob:2', sourceId: '2', source: 'gamejob', expiredAt: null, detailScrapedAt: new Date(now - 2 * day), registeredAt: new Date(now - 2000) },
+      // 대상: wanted, detail 없음 — 새로 지원됨
+      { id: 'wanted:9', sourceId: '9', source: 'wanted', expiredAt: null, detailScrapedAt: null, registeredAt: new Date(now - 1500) },
       // 제외: 1시간 전 (stale 아님)
       { id: 'gamejob:3', sourceId: '3', source: 'gamejob', expiredAt: null, detailScrapedAt: new Date(now - 60 * 60 * 1000), registeredAt: new Date(now - 3000) },
       // 제외: 만료됨
       { id: 'gamejob:4', sourceId: '4', source: 'gamejob', expiredAt: new Date(), detailScrapedAt: null, registeredAt: new Date(now - 4000) },
-      // 제외: 타 소스
-      { id: 'wanted:5', sourceId: '5', source: 'wanted', expiredAt: null, detailScrapedAt: null, registeredAt: new Date(now - 5000) },
+      // 제외: detailFetchers에 없는 source (jobkorea)
+      { id: 'jobkorea:5', sourceId: '5', source: 'jobkorea', expiredAt: null, detailScrapedAt: null, registeredAt: new Date(now - 5000) },
     ]);
     const r = await service.rescrapeStaleDetails({ sleepMs: 0 });
-    expect(r.attempted).toBe(2);
-    expect(r.updated).toBe(2);
+    expect(r.attempted).toBe(3);
+    expect(r.updated).toBe(3);
     expect(r.failed).toBe(0);
+    // gamejob fetcher 2번 + wanted fetcher 1번
     expect(fetchDetail).toHaveBeenCalledTimes(2);
-    expect(update).toHaveBeenCalledTimes(2);
-    // 첫 update가 정확한 데이터 형태로 호출
-    expect(update.mock.calls[0][0]).toMatchObject({
+    expect(wantedFetchDetail).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(3);
+    // gamejob update의 data 형태
+    const gamejobUpdate = update.mock.calls.find((c) =>
+      (c[0] as { where: { id: string } }).where.id.startsWith('gamejob:'),
+    );
+    expect(gamejobUpdate?.[0]).toMatchObject({
       where: { id: expect.any(String) },
       data: {
         companyLogoUrl: 'https://logo/x.jpg',

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { GamejobScraperService } from './gamejob-scraper.service';
 import { GamejobDetailService } from './gamejob-detail.service';
 import { WantedScraperService } from './wanted-scraper.service';
+import { WantedDetailService } from './wanted-detail.service';
 import { JobkoreaScraperService } from './jobkorea-scraper.service';
 import { SaraminScraperService } from './saramin-scraper.service';
 import { IncruitScraperService } from './incruit-scraper.service';
@@ -11,6 +12,7 @@ import { IncruitScraperService } from './incruit-scraper.service';
     GamejobScraperService,
     GamejobDetailService,
     WantedScraperService,
+    WantedDetailService,
     JobkoreaScraperService,
     SaraminScraperService,
     IncruitScraperService,
@@ -19,6 +21,7 @@ import { IncruitScraperService } from './incruit-scraper.service';
     GamejobScraperService,
     GamejobDetailService,
     WantedScraperService,
+    WantedDetailService,
     JobkoreaScraperService,
     SaraminScraperService,
     IncruitScraperService,
