@@ -1,6 +1,7 @@
 import type { Job, JobSource } from '@bini/types';
 import { JobImageCarousel } from './JobImageCarousel';
 import { CompanyAvatar } from './CompanyAvatar';
+import { deadlineBadge, parseDeadline } from '../lib/deadline';
 
 const SOURCE_LABEL: Record<JobSource, string> = {
   gamejob: '게임잡',
@@ -18,7 +19,13 @@ const SOURCE_COLOR: Record<JobSource, string> = {
   incruit: 'bg-pink-100 text-pink-700',
 };
 
+function jobplanetSearchUrl(company: string): string {
+  return `https://www.jobplanet.co.kr/search?query_type=company&query=${encodeURIComponent(company)}`;
+}
+
 export function JobCard({ job }: { job: Job }) {
+  const deadline = parseDeadline(job.deadline);
+  const badge = deadlineBadge(deadline);
   return (
     <article
       className={`overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm ${job.expired ? 'opacity-60' : ''}`}
@@ -40,12 +47,37 @@ export function JobCard({ job }: { job: Job }) {
               <span className="ml-1 opacity-70">+{job.alternateSources.length}</span>
             )}
           </span>
-          {job.expired && (
+          {job.expired ? (
             <span className="rounded bg-gray-200 px-1.5 py-0.5 text-xs font-medium text-gray-700">
               마감
             </span>
-          )}
+          ) : badge === 'urgent' ? (
+            <span
+              className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-700"
+              title={deadline.date?.toLocaleDateString('ko-KR')}
+            >
+              D-{deadline.daysRemaining}
+            </span>
+          ) : badge === 'soon' ? (
+            <span
+              className="rounded bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700"
+              title={deadline.date?.toLocaleDateString('ko-KR')}
+            >
+              D-{deadline.daysRemaining}
+            </span>
+          ) : null}
           <p className="text-sm text-gray-500">{job.company}</p>
+          {/* 잡플래닛 회사 검색 — 회사 평판·연봉·면접 정보 빠른 진입 */}
+          <a
+            href={jobplanetSearchUrl(job.company)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            title={`${job.company} 잡플래닛 평판 보기`}
+            className="rounded text-xs text-gray-500 hover:text-blue-600 hover:underline focus:outline-none focus-visible:text-blue-700 focus-visible:underline focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1"
+          >
+            잡플래닛 ↗
+          </a>
         </div>
         <a
           href={job.detailUrl}
