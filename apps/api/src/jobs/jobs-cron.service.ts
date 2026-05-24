@@ -3,10 +3,12 @@ import type { Job, JobSource, JobsResponse } from '@bini/types';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { GamejobDetailService } from '../scraper/gamejob-detail.service';
 import { WantedScraperService } from '../scraper/wanted-scraper.service';
+import { WantedDetailService } from '../scraper/wanted-detail.service';
 import { JobkoreaScraperService } from '../scraper/jobkorea-scraper.service';
 import { SaraminScraperService } from '../scraper/saramin-scraper.service';
 import { IncruitScraperService } from '../scraper/incruit-scraper.service';
 import { PrismaService } from '../prisma/prisma.service';
+import type { JobDetailExtract } from '../scraper/gamejob-detail-parser';
 import { parseTitle } from '../title/title-parser';
 import { parseRelativeTime } from '../time/relative-time';
 import type { JobScraper } from '../scraper/scraper.interface';
@@ -50,10 +52,17 @@ export interface ScrapeResult {
  * 기존 JobsService는 통합 테스트 호환을 위해 유지하되, 사용자 요청 경로의 Controller는
  * 이 서비스의 getJobsFromDb를 호출하도록 전환한다.
  */
+/** detail fetcher 시그니처 — `JobDetailExtract`를 반환하는 source별 어댑터. */
+interface JobDetailFetcher {
+  fetchDetail(sourceId: string): Promise<JobDetailExtract>;
+}
+
 @Injectable()
 export class JobsCronService {
   private readonly logger = new Logger(JobsCronService.name);
   private readonly scrapers: JobScraper[];
+  /** detail 재스크래핑을 지원하는 source → fetcher 매핑. 새 source 추가 시 여기 등록. */
+  private readonly detailFetchers: Record<string, JobDetailFetcher>;
 
   constructor(
     gamejob: GamejobScraperService,
@@ -62,9 +71,14 @@ export class JobsCronService {
     saramin: SaraminScraperService,
     incruit: IncruitScraperService,
     private readonly prisma: PrismaService,
-    private readonly detail: GamejobDetailService,
+    private readonly gamejobDetail: GamejobDetailService,
+    private readonly wantedDetail: WantedDetailService,
   ) {
     this.scrapers = [gamejob, wanted, jobkorea, saramin, incruit];
+    this.detailFetchers = {
+      gamejob: this.gamejobDetail,
+      wanted: this.wantedDetail,
+    };
   }
 
   /**
@@ -146,7 +160,9 @@ export class JobsCronService {
     });
 
     if (upserts.length > 0) {
-      await this.prisma.$transaction(upserts);
+      // 페이지당 dedup된 잡 수십~수백 건 × upsert. Prisma 기본 5초 timeout으로는
+      // Neon serverless cold-start까지 끼면 부족하다. 30초로 여유 부여.
+      await this.prisma.$transaction(upserts, { timeout: 30_000 });
     }
 
     this.logger.log(
@@ -217,10 +233,11 @@ export class JobsCronService {
   }
 
   /**
-   * 게임잡 상세 페이지를 재스크래핑해서 회사 로고·사진·대표게임·본문 키아트를 갱신.
+   * 상세 페이지를 재스크래핑해서 회사 로고·사진·대표게임·본문 키아트를 갱신.
+   * 현재 지원 source: gamejob (본문 iframe) + wanted (api/v4/jobs/<id>).
    *
    * 대상:
-   *   - `source='gamejob'` AND `expiredAt IS NULL` (만료 잡은 갱신 무의미)
+   *   - `source IN detailFetchers` AND `expiredAt IS NULL` (만료 잡은 갱신 무의미)
    *   - `detailScrapedAt IS NULL` (lazy enrichment를 트리거할 사용자 클릭이 없었던 잡)
    *     OR `detailScrapedAt < now - staleAgeMs`
    *
@@ -228,38 +245,44 @@ export class JobsCronService {
    *   - `detailScrapedAt asc nulls first` — 가장 오래된(또는 한 번도 안 본) 것부터.
    *   - 동순위 시 `registeredAt desc` — 최신 잡 우선.
    *
-   * 한 cron 사이클당 limit으로 캡 — 게임잡에 burst를 만들지 않고, 워크플로우
+   * 한 cron 사이클당 limit으로 캡 — 외부 사이트에 burst를 만들지 않고, 워크플로우
    * 시간(30분)도 안전하게 지킨다. 잡당 fetchDetail은 8s timeout + 500ms sleep.
    * 100건이면 최악 13분, 평균 2-3분.
    */
   async rescrapeStaleDetails(opts?: {
     limit?: number;
     staleAgeMs?: number;
-    /** 잡당 sleep — 게임잡 burst 방어. 단위 테스트에선 0으로 전달. */
+    /** 잡당 sleep — 외부 사이트 burst 방어. 단위 테스트에선 0으로 전달. */
     sleepMs?: number;
   }): Promise<{ attempted: number; updated: number; failed: number }> {
     const limit = opts?.limit ?? DEFAULT_DETAIL_RESCRAPE_LIMIT;
     const staleAgeMs = opts?.staleAgeMs ?? DEFAULT_DETAIL_STALE_MS;
     const sleepMs = opts?.sleepMs ?? DETAIL_RESCRAPE_SLEEP_MS;
     const cutoff = new Date(Date.now() - staleAgeMs);
+    const supportedSources = Object.keys(this.detailFetchers);
 
     const targets = await this.prisma.job.findMany({
       where: {
-        source: 'gamejob',
+        source: { in: supportedSources },
         expiredAt: null,
         OR: [{ detailScrapedAt: null }, { detailScrapedAt: { lt: cutoff } }],
       },
       orderBy: [{ detailScrapedAt: 'asc' }, { registeredAt: 'desc' }],
       take: limit,
-      select: { id: true, sourceId: true },
+      select: { id: true, sourceId: true, source: true },
     });
 
     let updated = 0;
     let failed = 0;
     for (let i = 0; i < targets.length; i++) {
       const job = targets[i];
+      const fetcher = this.detailFetchers[job.source];
+      if (!fetcher) {
+        // source 매핑이 사라진 경우 — 안전상 skip (where 절이 이미 걸렀어야 함).
+        continue;
+      }
       try {
-        const detail = await this.detail.fetchDetail(job.sourceId || job.id);
+        const detail = await fetcher.fetchDetail(job.sourceId || job.id);
         await this.prisma.job.update({
           where: { id: job.id },
           data: {
