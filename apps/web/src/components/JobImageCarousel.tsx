@@ -204,7 +204,6 @@ export function JobImageCarousel({
   return (
     <>
       <div
-        ref={rootRef}
         data-testid="image-carousel"
         className="group relative h-48 w-full overflow-hidden bg-gray-100"
         onTouchStart={(e) => {

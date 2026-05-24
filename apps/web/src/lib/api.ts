@@ -36,12 +36,11 @@ export async function fetchGameImage(
 }
 
 export async function fetchJobImages(jobId: string): Promise<JobImagesResponse> {
-  // 5분 데이터 캐시 — bodyImages/companyPhotos는 detail rescrape(1d)마다만
-  // 바뀌고, 사용자 신고 차단은 어차피 다음 30s에 새로 fetch될 때 반영되므로
-  // 5분 캐시가 N+1 round-trip 비용을 크게 깎는다.
+  // 30s 데이터 캐시 — 신고된 이미지가 다른 사용자에게 stale 노출되는 최악
+  // 윈도우를 5분 → 30s로 단축. N+1 round-trip 비용도 30s 동안 Edge가 캐시.
   const res = await fetch(
     `${BASE}/job-images?id=${encodeURIComponent(jobId)}`,
-    { next: { revalidate: 300 } },
+    { next: { revalidate: 30 } },
   );
   if (!res.ok) throw new Error(`잡 이미지 요청 실패: HTTP ${res.status}`);
   return res.json();

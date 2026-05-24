@@ -289,14 +289,19 @@ export class JobsCronService {
       }
       try {
         const detail = await fetcher.fetchDetail(job.sourceId || job.id);
+        // Partial update — detail에서 빈 결과로 돌아온 필드는 기존 값을 보존한다.
+        // (wanted/jobkorea/incruit/saramin은 representativeGames를 채울 경로가 없어
+        // 항상 [] 반환 — 매 rescrape마다 통째 덮어쓰면 다른 경로로 채워진 값 손실.)
         await this.prisma.job.update({
           where: { id: job.id },
           data: {
-            companyLogoUrl: detail.companyLogoUrl,
-            companyPhotos: detail.companyPhotos,
-            representativeGames: detail.representativeGames,
-            bodyImages: detail.bodyImages,
             detailScrapedAt: new Date(),
+            ...(detail.companyLogoUrl && { companyLogoUrl: detail.companyLogoUrl }),
+            ...(detail.companyPhotos.length > 0 && { companyPhotos: detail.companyPhotos }),
+            ...(detail.representativeGames.length > 0 && {
+              representativeGames: detail.representativeGames,
+            }),
+            ...(detail.bodyImages.length > 0 && { bodyImages: detail.bodyImages }),
           },
         });
         updated++;
