@@ -40,6 +40,12 @@ jobs:
           NAMUWIKI_MAX_TARGETS: '300'
         run: pnpm --filter crawler crawl:namuwiki
 
+      - name: Run saramin detail enrichment
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SARAMIN_MAX_TARGETS: '50'
+        run: pnpm --filter crawler crawl:saramin
+
       - name: Mark expired jobs
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

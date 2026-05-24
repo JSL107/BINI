@@ -14,6 +14,9 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # api의 build 스크립트가 `prisma migrate deploy`를 포함하므로 모든 스텝에 DATABASE_URL이 노출되어야 한다.
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,7 +43,6 @@ jobs:
 
       - name: Run cron-jobs
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           # 안전 상한 — 신규 비율이 낮으면 early-stop이 더 빨리 끊는다.
           CRON_MAX_PAGES: '20'
           # 한 페이지에서 신규 잡 비율이 이 값 미만이면 다음 페이지 진행 중단 (page 1 제외).

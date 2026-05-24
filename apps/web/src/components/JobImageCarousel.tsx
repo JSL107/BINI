@@ -5,6 +5,9 @@ import type { ImageQueryType } from '@bini/types';
 import { fetchGameImage, fetchJobImages, reportBadImage } from '../lib/api';
 import { JobImageModal } from './JobImageModal';
 
+// SSR 환경에서는 즉시 true로 설정해 fetch 호환 유지
+const isSSR = typeof window === 'undefined';
+
 type State =
   | { kind: 'loading' }
   | {
@@ -40,9 +43,30 @@ export function JobImageCarousel({
 }: JobImageCarouselProps) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [modalOpen, setModalOpen] = useState(false);
+  const [hasIntersected, setHasIntersected] = useState(isSSR);
   const touchStartX = useRef<number | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // IntersectionObserver: 카드가 viewport(200px margin)에 들어오면 fetch 허용
+  useEffect(() => {
+    if (isSSR) return;
+    const el = rootRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setHasIntersected(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px 0px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
+    if (!hasIntersected) return;
     let alive = true;
     setState({ kind: 'loading' });
 
@@ -58,6 +82,13 @@ export function JobImageCarousel({
             gameImages: jobImages.gameImages,
             companyPhotos: jobImages.companyPhotos,
           });
+          return;
+        }
+        // 단일 fallback은 imageQueryType='game'일 때만 — 회사명 검색은
+        // 주가 차트/제품 사진 같은 무관 이미지 매칭이 너무 많다 (F1).
+        // 회사명 fallback이 필요한 잡은 detail enrichment를 추가해 채워야 한다.
+        if (fallbackType !== 'game') {
+          setState({ kind: 'placeholder' });
           return;
         }
         const single = await fetchGameImage(fallbackQuery, fallbackType);
@@ -81,7 +112,7 @@ export function JobImageCarousel({
     return () => {
       alive = false;
     };
-  }, [jobId, fallbackQuery, fallbackType]);
+  }, [jobId, fallbackQuery, fallbackType, hasIntersected]);
 
   const advance = (delta: number) => {
     setState((s) => {
@@ -149,6 +180,7 @@ export function JobImageCarousel({
   if (state.kind === 'loading') {
     return (
       <div
+        ref={rootRef}
         data-testid="image-skeleton"
         className="h-48 w-full animate-pulse bg-gray-200"
       />

@@ -3,8 +3,16 @@ import type { JobImagesResponse } from '@bini/types';
 import { NamuwikiImageService } from '../image/namuwiki-image.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GamejobDetailService } from '../scraper/gamejob-detail.service';
+import { WantedDetailService } from '../scraper/wanted-detail.service';
+import { JobkoreaDetailService } from '../scraper/jobkorea-detail.service';
+import { IncruitDetailService } from '../scraper/incruit-detail.service';
+import type { JobDetailExtract } from '../scraper/gamejob-detail-parser';
 import { BadImageService } from './bad-image.service';
 import { ImagesService } from './images.service';
+
+interface JobDetailFetcher {
+  fetchDetail(sourceId: string): Promise<JobDetailExtract>;
+}
 
 const EMPTY: JobImagesResponse = {
   images: [],
@@ -17,14 +25,26 @@ const EMPTY: JobImagesResponse = {
 @Injectable()
 export class JobImagesService {
   private readonly inflight = new Map<string, Promise<JobImagesResponse>>();
+  /** lazy enrichment를 지원하는 source → fetcher 매핑. 새 source 추가 시 여기 등록. */
+  private readonly detailFetchers: Record<string, JobDetailFetcher>;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly detail: GamejobDetailService,
+    private readonly gamejobDetail: GamejobDetailService,
+    private readonly wantedDetail: WantedDetailService,
+    private readonly jobkoreaDetail: JobkoreaDetailService,
+    private readonly incruitDetail: IncruitDetailService,
     private readonly images: ImagesService,
     private readonly namuwiki: NamuwikiImageService,
     private readonly badImage: BadImageService,
-  ) {}
+  ) {
+    this.detailFetchers = {
+      gamejob: this.gamejobDetail,
+      wanted: this.wantedDetail,
+      jobkorea: this.jobkoreaDetail,
+      incruit: this.incruitDetail,
+    };
+  }
 
   resolve(rawId: string | undefined): Promise<JobImagesResponse> {
     const id = (rawId ?? '').trim();
@@ -44,17 +64,24 @@ export class JobImagesService {
     let job = await this.prisma.job.findUnique({ where: { id } });
     if (!job) return EMPTY;
 
-    // Lazy enrichment only for sources we can actually scrape (currently gamejob).
-    if (!job.detailScrapedAt && job.source === 'gamejob') {
-      const detail = await this.detail.fetchDetail(job.sourceId || id);
+    // Lazy enrichment — detailFetchers에 등록된 source(gamejob/wanted)만.
+    // 그 외 source(jobkorea/saramin/incruit)는 cron이 다른 경로로 채우거나 비어있음.
+    const fetcher = this.detailFetchers[job.source];
+    if (!job.detailScrapedAt && fetcher) {
+      const detail = await fetcher.fetchDetail(job.sourceId || id);
+      // Partial update — detail에서 빈 결과로 돌아온 필드는 기존 값을 보존한다.
+      // (wanted/jobkorea/incruit/saramin은 representativeGames를 채울 경로가 없어
+      // 항상 [] 반환 — 매 rescrape마다 통째 덮어쓰면 다른 경로로 채워진 값 손실.)
       job = await this.prisma.job.update({
         where: { id },
         data: {
-          companyLogoUrl: detail.companyLogoUrl,
-          companyPhotos: detail.companyPhotos,
-          representativeGames: detail.representativeGames,
-          bodyImages: detail.bodyImages,
           detailScrapedAt: new Date(),
+          ...(detail.companyLogoUrl && { companyLogoUrl: detail.companyLogoUrl }),
+          ...(detail.companyPhotos.length > 0 && { companyPhotos: detail.companyPhotos }),
+          ...(detail.representativeGames.length > 0 && {
+            representativeGames: detail.representativeGames,
+          }),
+          ...(detail.bodyImages.length > 0 && { bodyImages: detail.bodyImages }),
         },
       });
     }

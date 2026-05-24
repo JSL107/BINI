@@ -13,7 +13,7 @@
  *      verifyText가 포함된 결과만 채택 — 동명이인 게임 노이즈를 줄임.
  */
 
-const COMMUNITY_BLOCKLIST = [
+const DOMAIN_BLOCKLIST = [
   // 게임 토론 커뮤니티 — 본 검색어와 무관한 첨부가 흔함
   'playwares.com',
   'bbs.ruliweb.com',
@@ -22,6 +22,26 @@ const COMMUNITY_BLOCKLIST = [
   'm.dcinside.com',
   // 카페·블로그도 마찬가지로 노이즈가 잦음. 단, blogfiles.naver.net 자체는
   // 결과 품질이 들쭉날쭉이라 통째 차단하지 않고 그대로 둔다 (https인 한 사용).
+  // 금융/증권 — 게임 회사명이 종목명으로도 등장해 주가 차트가 첫 결과로
+  // 잡히는 패턴을 컷 (예: "카카오게임즈" 검색 → 카카오게임즈 주가 차트).
+  'finance.naver.com',
+  'm.stock.naver.com',
+  'finance.daum.net',
+  'tossinvest.com',
+  'kr.investing.com',
+];
+
+/**
+ * URL의 path 패턴으로 차단 — 같은 도메인 안에서 특정 경로(주가/증권/금융
+ * 이미지)만 거를 때. 호스트가 신뢰 도메인(naver/pstatic)이지만 path가
+ * finance 경로인 케이스를 컷한다.
+ */
+const PATH_PATTERN_BLOCKLIST: RegExp[] = [
+  /\/imgfinance\//i,    // ssl.pstatic.net/imgfinance/charts/...
+  /\/finance\/chart/i,
+  /\/stock\/chart/i,
+  /\/securities\//i,
+  /stockchart/i,
 ];
 
 const UA =
@@ -33,10 +53,18 @@ const VERIFY_TIMEOUT_MS = 5_000;
 /** 검증 시도할 최대 후보 수. 너무 많이 fetch하면 latency 폭증. */
 const VERIFY_MAX_CANDIDATES = 6;
 
-function isBlockedDomain(url: string): boolean {
+function isBlockedUrl(url: string): boolean {
   try {
-    const host = new URL(url).hostname.toLowerCase();
-    return COMMUNITY_BLOCKLIST.some((b) => host === b || host.endsWith('.' + b));
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    if (DOMAIN_BLOCKLIST.some((b) => host === b || host.endsWith('.' + b))) {
+      return true;
+    }
+    const pathQuery = u.pathname + u.search;
+    if (PATH_PATTERN_BLOCKLIST.some((re) => re.test(pathQuery))) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -73,7 +101,7 @@ export function parseImageCandidates(html: string): NaverCandidate[] {
     const imageUrl = decodeJsonStr(m[1]);
     const pageUrl = decodeJsonStr(m[2]);
     if (!imageUrl || !imageUrl.startsWith('https://')) continue;
-    if (isBlockedDomain(imageUrl)) continue;
+    if (isBlockedUrl(imageUrl)) continue;
     if (seen.has(imageUrl)) continue;
     seen.add(imageUrl);
     out.push({ imageUrl, pageUrl });
@@ -84,7 +112,7 @@ export function parseImageCandidates(html: string): NaverCandidate[] {
   while ((m = singleRe.exec(html)) !== null) {
     const imageUrl = decodeJsonStr(m[1]);
     if (!imageUrl || !imageUrl.startsWith('https://')) continue;
-    if (isBlockedDomain(imageUrl)) continue;
+    if (isBlockedUrl(imageUrl)) continue;
     if (seen.has(imageUrl)) continue;
     seen.add(imageUrl);
     out.push({ imageUrl, pageUrl: null });

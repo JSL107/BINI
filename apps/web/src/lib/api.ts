@@ -14,7 +14,12 @@ export async function fetchJobs(
 ): Promise<JobsResponse> {
   const params = new URLSearchParams({ page: String(page) });
   if (search) params.set('q', search);
-  const res = await fetch(`${BASE}/jobs?${params.toString()}`, { cache: 'no-store' });
+  // 30s 데이터 캐시 — cron이 잡 갱신을 3h 주기로 돌리므로 30s 지연은 안전.
+  // 같은 page+search 조합 첫 사용자만 cold path를 타고 그 후 30초 동안은
+  // Vercel Edge가 즉시 응답.
+  const res = await fetch(`${BASE}/jobs?${params.toString()}`, {
+    next: { revalidate: 30 },
+  });
   if (!res.ok) throw new Error(`공고 목록 요청 실패: HTTP ${res.status}`);
   return res.json();
 }
@@ -24,15 +29,19 @@ export async function fetchGameImage(
   type: ImageQueryType,
 ): Promise<GameImageResponse> {
   const url = `${BASE}/game-image?q=${encodeURIComponent(query)}&type=${type}`;
-  const res = await fetch(url, { cache: 'no-store' });
+  // 5분 데이터 캐시 — game_images 캐시 자체가 14일 보존이라 5분 지연 무관.
+  const res = await fetch(url, { next: { revalidate: 300 } });
   if (!res.ok) throw new Error(`이미지 요청 실패: HTTP ${res.status}`);
   return res.json();
 }
 
 export async function fetchJobImages(jobId: string): Promise<JobImagesResponse> {
+  // 10s 데이터 캐시 — 사용자가 잘못된 이미지 신고 후 새로고침해도 같은 잡 응답이
+  // Edge cache hit으로 그대로 보이던 문제 단축. server 측 BadImageService 메모리
+  // 캐시는 같은 instance라면 즉시 차단되므로 Edge cache 10s만 지나면 반영됨.
   const res = await fetch(
     `${BASE}/job-images?id=${encodeURIComponent(jobId)}`,
-    { cache: 'no-store' },
+    { next: { revalidate: 10 } },
   );
   if (!res.ok) throw new Error(`잡 이미지 요청 실패: HTTP ${res.status}`);
   return res.json();
