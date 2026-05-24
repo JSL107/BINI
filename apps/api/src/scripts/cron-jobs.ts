@@ -7,7 +7,10 @@
  *      단 page 1은 항상 처리한다(신규가 0이라도 비교 기준이 필요하므로).
  *   3) 전체 소스가 실패한 페이지(totalFailure=true)를 만나면 즉시 종료한다.
  *   4) MAX_PAGES 도달 시 안전장치로 중단.
- *   5) sweepExpired() 호출 — lastSeenAt이 7일 넘은 잡에 expiredAt 마킹.
+ *   5) sweepExpired() — lastSeenAt이 7일 넘은 잡에 expiredAt 마킹.
+ *   6) rescrapeStaleDetails() — detailScrapedAt이 1일 넘은(또는 null인) 게임잡 잡들을
+ *      limit건 재스크래핑해 회사 로고·사진·대표게임·본문 키아트 최신화. 사용자
+ *      클릭이 없어 lazy enrichment가 일어나지 않은 잡까지 cron이 따라잡는다.
  *
  * Vercel 런타임에서는 호출되지 않는다. GitHub Actions `refresh-jobs.yml`에서만 실행.
  * 실행:
@@ -22,6 +25,7 @@ import { JobsCronService } from '../jobs/jobs-cron.service';
 
 const MAX_PAGES = Number(process.env.CRON_MAX_PAGES ?? '20');
 const EARLY_STOP_THRESHOLD = Number(process.env.CRON_EARLY_STOP_THRESHOLD ?? '0.2');
+const DETAIL_RESCRAPE_LIMIT = Number(process.env.CRON_DETAIL_RESCRAPE_LIMIT ?? '100');
 
 async function main() {
   const logger = new Logger('cron-jobs');
@@ -67,10 +71,14 @@ async function main() {
     }
 
     const expired = await jobsCron.sweepExpired();
+    const rescrape = await jobsCron.rescrapeStaleDetails({
+      limit: DETAIL_RESCRAPE_LIMIT,
+    });
 
     logger.log(
       `[summary] pages=${pagesProcessed} dedupedTotal=${totalDeduped} ` +
-        `newTotal=${totalNew} expired=${expired}`,
+        `newTotal=${totalNew} expired=${expired} ` +
+        `detailRescrape=${rescrape.updated}/${rescrape.attempted} (failed=${rescrape.failed})`,
     );
   } finally {
     await app.close().catch(() => undefined);

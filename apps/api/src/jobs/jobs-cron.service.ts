@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Job, JobSource, JobsResponse } from '@bini/types';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
+import { GamejobDetailService } from '../scraper/gamejob-detail.service';
 import { WantedScraperService } from '../scraper/wanted-scraper.service';
 import { JobkoreaScraperService } from '../scraper/jobkorea-scraper.service';
 import { SaraminScraperService } from '../scraper/saramin-scraper.service';
@@ -15,6 +16,12 @@ import { dedupeJobs } from './dedupe';
 /** lastSeenAt이 이 값을 넘은 잡은 expired로 간주 (sweepExpired 임계값 + computeExpired 동적 계산 기준). */
 const EXPIRY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_PER_PAGE = 50;
+/** detail 재스크래핑 stale 기준. detailScrapedAt이 이 값보다 오래된 잡 또는 null인 잡을 대상으로. */
+const DEFAULT_DETAIL_STALE_MS = 24 * 60 * 60 * 1000;
+/** 한 cron 사이클에서 detail 재스크래핑할 최대 잡 수 (게임잡 burst 보호 + 워크플로우 시간 캡). */
+const DEFAULT_DETAIL_RESCRAPE_LIMIT = 100;
+/** 잡당 detail fetch 사이 sleep — 게임잡에 burst를 만들지 않기 위한 정중함. */
+const DETAIL_RESCRAPE_SLEEP_MS = 500;
 
 /**
  * cron 호출자에게 반환하는 메타. early-stop 알고리즘이 newCount/dedupedCount 비율을
@@ -55,6 +62,7 @@ export class JobsCronService {
     saramin: SaraminScraperService,
     incruit: IncruitScraperService,
     private readonly prisma: PrismaService,
+    private readonly detail: GamejobDetailService,
   ) {
     this.scrapers = [gamejob, wanted, jobkorea, saramin, incruit];
   }
@@ -206,6 +214,76 @@ export class JobsCronService {
       this.logger.log(`sweepExpired: ${result.count}건 마킹`);
     }
     return result.count;
+  }
+
+  /**
+   * 게임잡 상세 페이지를 재스크래핑해서 회사 로고·사진·대표게임·본문 키아트를 갱신.
+   *
+   * 대상:
+   *   - `source='gamejob'` AND `expiredAt IS NULL` (만료 잡은 갱신 무의미)
+   *   - `detailScrapedAt IS NULL` (lazy enrichment를 트리거할 사용자 클릭이 없었던 잡)
+   *     OR `detailScrapedAt < now - staleAgeMs`
+   *
+   * 정렬:
+   *   - `detailScrapedAt asc nulls first` — 가장 오래된(또는 한 번도 안 본) 것부터.
+   *   - 동순위 시 `registeredAt desc` — 최신 잡 우선.
+   *
+   * 한 cron 사이클당 limit으로 캡 — 게임잡에 burst를 만들지 않고, 워크플로우
+   * 시간(30분)도 안전하게 지킨다. 잡당 fetchDetail은 8s timeout + 500ms sleep.
+   * 100건이면 최악 13분, 평균 2-3분.
+   */
+  async rescrapeStaleDetails(opts?: {
+    limit?: number;
+    staleAgeMs?: number;
+    /** 잡당 sleep — 게임잡 burst 방어. 단위 테스트에선 0으로 전달. */
+    sleepMs?: number;
+  }): Promise<{ attempted: number; updated: number; failed: number }> {
+    const limit = opts?.limit ?? DEFAULT_DETAIL_RESCRAPE_LIMIT;
+    const staleAgeMs = opts?.staleAgeMs ?? DEFAULT_DETAIL_STALE_MS;
+    const sleepMs = opts?.sleepMs ?? DETAIL_RESCRAPE_SLEEP_MS;
+    const cutoff = new Date(Date.now() - staleAgeMs);
+
+    const targets = await this.prisma.job.findMany({
+      where: {
+        source: 'gamejob',
+        expiredAt: null,
+        OR: [{ detailScrapedAt: null }, { detailScrapedAt: { lt: cutoff } }],
+      },
+      orderBy: [{ detailScrapedAt: 'asc' }, { registeredAt: 'desc' }],
+      take: limit,
+      select: { id: true, sourceId: true },
+    });
+
+    let updated = 0;
+    let failed = 0;
+    for (let i = 0; i < targets.length; i++) {
+      const job = targets[i];
+      try {
+        const detail = await this.detail.fetchDetail(job.sourceId || job.id);
+        await this.prisma.job.update({
+          where: { id: job.id },
+          data: {
+            companyLogoUrl: detail.companyLogoUrl,
+            companyPhotos: detail.companyPhotos,
+            representativeGames: detail.representativeGames,
+            bodyImages: detail.bodyImages,
+            detailScrapedAt: new Date(),
+          },
+        });
+        updated++;
+      } catch (err) {
+        failed++;
+        this.logger.warn(`rescrape ${job.id} 실패: ${String(err).slice(0, 140)}`);
+      }
+      if (i + 1 < targets.length && sleepMs > 0) {
+        await new Promise((r) => setTimeout(r, sleepMs));
+      }
+    }
+
+    this.logger.log(
+      `rescrapeStaleDetails: attempted=${targets.length} updated=${updated} failed=${failed}`,
+    );
+    return { attempted: targets.length, updated, failed };
   }
 }
 
