@@ -2,7 +2,9 @@ import { fetchJobs } from '../lib/api';
 import { JobsGridWithFilter } from '../components/JobsGridWithFilter';
 import { Pagination } from '../components/Pagination';
 
-export const dynamic = 'force-dynamic';
+// force-dynamic 제거 — fetchJobs가 next.revalidate=30으로 캐시되므로 같은
+// page+search 조합은 30s 동안 Vercel Edge에서 즉시 응답. page는 searchParams
+// 의존이라 자동 dynamic이지만 fetch 결과 캐시는 살아 있어 cold path만 컷.
 
 export default async function Home({
   searchParams,

@@ -14,7 +14,12 @@ export async function fetchJobs(
 ): Promise<JobsResponse> {
   const params = new URLSearchParams({ page: String(page) });
   if (search) params.set('q', search);
-  const res = await fetch(`${BASE}/jobs?${params.toString()}`, { cache: 'no-store' });
+  // 30s 데이터 캐시 — cron이 잡 갱신을 3h 주기로 돌리므로 30s 지연은 안전.
+  // 같은 page+search 조합 첫 사용자만 cold path를 타고 그 후 30초 동안은
+  // Vercel Edge가 즉시 응답.
+  const res = await fetch(`${BASE}/jobs?${params.toString()}`, {
+    next: { revalidate: 30 },
+  });
   if (!res.ok) throw new Error(`공고 목록 요청 실패: HTTP ${res.status}`);
   return res.json();
 }
@@ -24,15 +29,19 @@ export async function fetchGameImage(
   type: ImageQueryType,
 ): Promise<GameImageResponse> {
   const url = `${BASE}/game-image?q=${encodeURIComponent(query)}&type=${type}`;
-  const res = await fetch(url, { cache: 'no-store' });
+  // 5분 데이터 캐시 — game_images 캐시 자체가 14일 보존이라 5분 지연 무관.
+  const res = await fetch(url, { next: { revalidate: 300 } });
   if (!res.ok) throw new Error(`이미지 요청 실패: HTTP ${res.status}`);
   return res.json();
 }
 
 export async function fetchJobImages(jobId: string): Promise<JobImagesResponse> {
+  // 5분 데이터 캐시 — bodyImages/companyPhotos는 detail rescrape(1d)마다만
+  // 바뀌고, 사용자 신고 차단은 어차피 다음 30s에 새로 fetch될 때 반영되므로
+  // 5분 캐시가 N+1 round-trip 비용을 크게 깎는다.
   const res = await fetch(
     `${BASE}/job-images?id=${encodeURIComponent(jobId)}`,
-    { cache: 'no-store' },
+    { next: { revalidate: 300 } },
   );
   if (!res.ok) throw new Error(`잡 이미지 요청 실패: HTTP ${res.status}`);
   return res.json();
