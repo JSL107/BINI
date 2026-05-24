@@ -12,8 +12,35 @@ function absoluteUrl(href: string): string {
 
 /**
  * 사람인 "게임 원화" 검색결과 HTML에서 item_recruit 카드를 RawJob 배열로 추출한다.
- * 사람인 검색은 "원화" 카테고리 매칭이라 결과가 이미 art-relevant — 추가 키워드 필터링 안 함.
+ * 사람인 검색은 본문/직무에 "게임"과 "원화"가 따로 들어가기만 해도 매치하므로
+ * (예: 케이비아이동국실업, 신지모루 같은 비-게임 회사가 섞임), title에 아트 관련
+ * 키워드가 없으면 제외한다 — 화이트리스트 방식.
  */
+const ART_TITLE_KEYWORDS = [
+  '원화',
+  '일러',
+  '아트',
+  '아티스트',
+  '디자이너',
+  '그래픽',
+  '컨셉',
+  'concept',
+  '캐릭터',
+  '배경',
+  '콘셉트',
+  '콘티',
+  '스토리보드',
+  '2d',
+  '3d',
+  'illustration',
+  'artist',
+];
+
+function isArtRelevantTitle(title: string): boolean {
+  const lower = title.toLowerCase();
+  return ART_TITLE_KEYWORDS.some((kw) => lower.includes(kw.toLowerCase()));
+}
+
 export function parseSaraminList(html: string): RawJob[] {
   const $ = cheerio.load(html);
   const jobs: RawJob[] = [];
@@ -30,6 +57,8 @@ export function parseSaraminList(html: string): RawJob[] {
     const titleSpan = titleAnchor.find('span').first();
     const title = (titleSpan.text() || titleAnchor.attr('title') || '').trim();
     if (!title) return;
+    // 사람인 검색은 회사 본문에 "게임" 단어만 있어도 매치되므로 art 직군 키워드로 한 번 더 거른다.
+    if (!isArtRelevantTitle(title)) return;
 
     const companyAnchor = card.find('div.area_corp strong.corp_name a').first();
     const company = companyAnchor.text().trim();
