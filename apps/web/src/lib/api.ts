@@ -36,11 +36,12 @@ export async function fetchGameImage(
 }
 
 export async function fetchJobImages(jobId: string): Promise<JobImagesResponse> {
-  // 30s 데이터 캐시 — 신고된 이미지가 다른 사용자에게 stale 노출되는 최악
-  // 윈도우를 5분 → 30s로 단축. N+1 round-trip 비용도 30s 동안 Edge가 캐시.
+  // 10s 데이터 캐시 — 사용자 신고 후 다른 인스턴스/사용자에게 반영되는
+  // 최악 윈도우를 10s로. 신고 인스턴스 자신은 server BadImageService가
+  // DB 기반이라 다음 응답부터 즉시 제거.
   const res = await fetch(
     `${BASE}/job-images?id=${encodeURIComponent(jobId)}`,
-    { next: { revalidate: 30 } },
+    { next: { revalidate: 10 } },
   );
   if (!res.ok) throw new Error(`잡 이미지 요청 실패: HTTP ${res.status}`);
   return res.json();

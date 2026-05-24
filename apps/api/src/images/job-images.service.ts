@@ -172,13 +172,14 @@ export class JobImagesService {
       ...(bracketUrl ? [bracketUrl] : []),
     ]);
 
-    // 사용자 신고로 차단된 URL 제거 — 부적절·오매칭 이미지를 자가학습으로 거른다.
-    const gameImages = this.badImage.filterUrls(gameImagesRaw);
+    // 사용자 신고로 차단된 URL 제거 — DB 기반이라 Vercel multi-instance에서도
+    // 일관되게 반영된다 (메모리 Set 캐시였을 때 instance 간 전파 안 되던 회귀 fix).
+    const gameImages = await this.badImage.filterUrls(gameImagesRaw);
 
     // Cross-tab URL dedup: if a body image happened to also be in CoImage/VIew
     // (rare but possible — same blob path), the game tab wins.
     const gameSet = new Set(gameImages);
-    const companyPhotos = this.badImage.filterUrls(
+    const companyPhotos = await this.badImage.filterUrls(
       job.companyPhotos.filter((u) => !gameSet.has(u)),
     );
 
