@@ -33,6 +33,14 @@ const SLEEP_MAX_MS = Number(process.env.SARAMIN_SLEEP_MAX_MS ?? '9000');
 const PAGE_TIMEOUT_MS = Number(process.env.SARAMIN_PAGE_TIMEOUT_MS ?? '20000');
 const STALE_AGE_MS = 24 * 60 * 60 * 1000;
 
+// Logo classification thresholds
+const LOGO_MAX_WIDTH = 480;
+const LOGO_MAX_HEIGHT = 240;
+const LOGO_MIN_RATIO = 0.3;
+const LOGO_MAX_RATIO = 3.0;
+const LOGO_TOP_THRESHOLD = 400;
+const MIN_IMAGE_DIM = 80;
+
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
@@ -114,18 +122,19 @@ interface Classified {
 }
 
 function classify(images: ImageInfo[]): Classified {
-  // 너비/높이 < 80px은 픽셀/아이콘으로 컷.
-  const visible = images.filter((i) => i.width >= 80 && i.height >= 80);
+  // 너비/높이 < MIN_IMAGE_DIM은 픽셀/아이콘으로 컷.
+  const visible = images.filter((i) => i.width >= MIN_IMAGE_DIM && i.height >= MIN_IMAGE_DIM);
   if (visible.length === 0) return { companyLogoUrl: null, bodyImages: [] };
 
-  // 회사 로고: 페이지 최상단(top<400)에 있는, 정사각형에 가까운 작은 이미지.
+  // 회사 로고: 페이지 최상단(top<LOGO_TOP_THRESHOLD)에 있는 로고 후보.
+  // 가로형 plate 로고(wide-rect)도 허용하도록 ratio/size 범위 완화.
   let companyLogoUrl: string | null = null;
   for (const i of visible) {
     if (companyLogoUrl) break;
-    if (i.top >= 400) continue;
-    if (i.width > 240 || i.height > 240) continue;
+    if (i.top >= LOGO_TOP_THRESHOLD) continue;
+    if (i.width > LOGO_MAX_WIDTH || i.height > LOGO_MAX_HEIGHT) continue;
     const ratio = i.width / Math.max(1, i.height);
-    if (ratio < 0.6 || ratio > 1.7) continue;
+    if (ratio < LOGO_MIN_RATIO || ratio > LOGO_MAX_RATIO) continue;
     companyLogoUrl = i.url;
   }
 
@@ -149,10 +158,8 @@ async function upsertJob(
   await db.query(
     `
     UPDATE jobs
-    SET "companyLogoUrl" = $2,
-        "bodyImages" = $3::text[],
-        "companyPhotos" = ARRAY[]::text[],
-        "representativeGames" = ARRAY[]::text[],
+    SET "companyLogoUrl" = COALESCE($2, "companyLogoUrl"),
+        "bodyImages" = CASE WHEN array_length($3::text[], 1) IS NULL THEN "bodyImages" ELSE $3::text[] END,
         "detailScrapedAt" = now()
     WHERE id = $1
     `,
