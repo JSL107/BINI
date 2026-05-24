@@ -1,4 +1,9 @@
 import type { JobSource, StatsResponse } from '@bini/types';
+import {
+  ActiveBySourceBars,
+  TopCompaniesChart,
+  WeeklyTrendChart,
+} from '../../components/TrendCharts';
 
 export const revalidate = 60; // 1분마다 ISR
 
@@ -60,8 +65,46 @@ export default async function StatsPage() {
           </section>
 
           <section className="mb-8">
-            <h2 className="mb-3 text-lg font-semibold text-gray-800">소스별 분포</h2>
+            <h2 className="mb-3 text-lg font-semibold text-gray-800">소스별 분포 (전체)</h2>
             <SourceBars bySource={stats.bySource} total={stats.total} />
+          </section>
+
+          <section className="mb-8">
+            <h2 className="mb-3 text-lg font-semibold text-gray-800">
+              주별 신규 공고 추세
+            </h2>
+            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <WeeklyTrendChart data={stats.weeklyTrend ?? []} />
+            </div>
+          </section>
+
+          <section className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div>
+              <h2 className="mb-3 text-lg font-semibold text-gray-800">
+                회사별 누적 공고 Top 20
+              </h2>
+              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                <TopCompaniesChart data={stats.topCompanies ?? []} />
+              </div>
+            </div>
+            <div>
+              <h2 className="mb-3 text-lg font-semibold text-gray-800">
+                활성 공고 소스 점유율 (dedup 후)
+              </h2>
+              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                <ActiveBySourceBars
+                  bySource={
+                    stats.activeBySource ?? {
+                      gamejob: 0,
+                      wanted: 0,
+                      jobkorea: 0,
+                      saramin: 0,
+                      incruit: 0,
+                    }
+                  }
+                />
+              </div>
+            </div>
           </section>
 
           <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">

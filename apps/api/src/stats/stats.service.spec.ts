@@ -2,14 +2,19 @@ import { StatsService } from './stats.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('StatsService.getStats', () => {
-  function build(overrides: Partial<{
-    bySource: Array<{ source: string; _count: { _all: number } }>;
-    expiredCount: number;
-    totalCount: number;
-    newLast24h: number;
-    lastCronRow: { lastSeenAt: Date } | null;
-    enrichedCount: number;
-  }> = {}) {
+  function build(
+    overrides: Partial<{
+      bySource: Array<{ source: string; _count: { _all: number } }>;
+      expiredCount: number;
+      totalCount: number;
+      newLast24h: number;
+      lastCronRow: { lastSeenAt: Date } | null;
+      enrichedCount: number;
+      activeBySource: Array<{ source: string; _count: { _all: number } }>;
+      topCompanies: Array<{ company: string; _count: { _all: number } }>;
+      weeklyTrendRows: Array<{ week_start: Date; count: bigint | number }>;
+    }> = {},
+  ) {
     const bySource = overrides.bySource ?? [
       { source: 'gamejob', _count: { _all: 40 } },
       { source: 'jobkorea', _count: { _all: 11 } },
@@ -22,8 +27,18 @@ describe('StatsService.getStats', () => {
       'lastCronRow' in overrides
         ? overrides.lastCronRow
         : { lastSeenAt: new Date('2026-05-23T10:00:00Z') };
+    const activeBySource = overrides.activeBySource ?? [
+      { source: 'gamejob', _count: { _all: 35 } },
+    ];
+    const topCompanies = overrides.topCompanies ?? [
+      { company: 'GameCo', _count: { _all: 12 } },
+      { company: 'StudioX', _count: { _all: 8 } },
+    ];
+    const weeklyTrendRows = overrides.weeklyTrendRows ?? [
+      { week_start: new Date('2026-05-18T00:00:00Z'), count: 7n },
+      { week_start: new Date('2026-05-11T00:00:00Z'), count: 3n },
+    ];
 
-    // PrismaService에 호출되는 메서드 stub — 결과는 $transaction이 일괄 반환
     const job = {
       groupBy: jest.fn().mockReturnValue('groupByCall'),
       count: jest.fn().mockReturnValue('countCall'),
@@ -31,9 +46,19 @@ describe('StatsService.getStats', () => {
     };
     const $transaction = jest
       .fn()
-      .mockResolvedValue([bySource, expiredCount, totalCount, newLast24h, lastCronRow, enrichedCount]);
-    const prisma = { job, $transaction } as unknown as PrismaService;
-    return { service: new StatsService(prisma), $transaction };
+      .mockResolvedValue([
+        bySource,
+        expiredCount,
+        totalCount,
+        newLast24h,
+        lastCronRow,
+        enrichedCount,
+        activeBySource,
+        topCompanies,
+      ]);
+    const $queryRaw = jest.fn().mockResolvedValue(weeklyTrendRows);
+    const prisma = { job, $transaction, $queryRaw } as unknown as PrismaService;
+    return { service: new StatsService(prisma), $transaction, $queryRaw };
   }
 
   it('소스별 카운트를 5개 키 모두로 정규화한다 (없는 소스는 0)', async () => {
@@ -93,7 +118,6 @@ describe('StatsService.getStats', () => {
     });
     const stats = await service.getStats();
     expect(stats.bySource.gamejob).toBe(40);
-    // unknown_source는 어떤 키에도 누적되지 않음
     expect(stats.bySource).toEqual({
       gamejob: 40,
       wanted: 0,
@@ -101,5 +125,56 @@ describe('StatsService.getStats', () => {
       saramin: 0,
       incruit: 0,
     });
+  });
+
+  it('activeBySource도 5개 키 정규화', async () => {
+    const { service } = build({
+      activeBySource: [
+        { source: 'gamejob', _count: { _all: 30 } },
+        { source: 'wanted', _count: { _all: 2 } },
+      ],
+    });
+    const stats = await service.getStats();
+    expect(stats.activeBySource).toEqual({
+      gamejob: 30,
+      wanted: 2,
+      jobkorea: 0,
+      saramin: 0,
+      incruit: 0,
+    });
+  });
+
+  it('topCompanies는 company/count 매핑 + 입력 순서 보존', async () => {
+    const { service } = build({
+      topCompanies: [
+        { company: 'A', _count: { _all: 9 } },
+        { company: 'B', _count: { _all: 4 } },
+      ],
+    });
+    const stats = await service.getStats();
+    expect(stats.topCompanies).toEqual([
+      { company: 'A', count: 9 },
+      { company: 'B', count: 4 },
+    ]);
+  });
+
+  it('weeklyTrend는 weekStart(YYYY-MM-DD) + 숫자 count', async () => {
+    const { service } = build({
+      weeklyTrendRows: [
+        { week_start: new Date('2026-05-18T00:00:00Z'), count: 7n },
+        { week_start: new Date('2026-05-11T00:00:00Z'), count: 3n },
+      ],
+    });
+    const stats = await service.getStats();
+    expect(stats.weeklyTrend).toEqual([
+      { weekStart: '2026-05-18', count: 7 },
+      { weekStart: '2026-05-11', count: 3 },
+    ]);
+  });
+
+  it('weeklyTrend가 비어 있어도 빈 배열로 반환', async () => {
+    const { service } = build({ weeklyTrendRows: [] });
+    const stats = await service.getStats();
+    expect(stats.weeklyTrend).toEqual([]);
   });
 });
