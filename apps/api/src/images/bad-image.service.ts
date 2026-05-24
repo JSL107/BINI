@@ -1,57 +1,47 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
- * 사용자가 "이 이미지 잘못됐어요" 버튼으로 신고한 URL을 DB(`bad_image_reports`)
- * 에서 그때그때 조회해 JobImagesService 응답을 필터링한다.
+ * 사용자가 "이 이미지 잘못됐어요" 버튼으로 신고한 URL을 메모리 set으로 보관해
+ * `JobImagesService`가 응답 결과를 필터링할 때 O(1)로 차단 판정한다.
  *
- * DB 기반인 이유: Vercel serverless는 요청마다 다른 function instance에 라우팅
- * 될 수 있는데, 메모리 Set 캐시는 instance별로 독립이라 한 instance에서 받은
- * 신고가 다른 instance의 응답에 반영되지 않는다(사용자가 신고해도 다른 인스턴스
- * 에서 같은 사진이 그대로 보이는 회귀). filterUrls를 매번 DB query로 호출하면
- * instance 간 일관성이 자연 보장됨.
+ * - 부트 시 DB(`bad_image_reports`)에서 모든 imageUrl을 한 번 로드 (warm cache).
+ * - 신고가 들어오면 메모리 set에 즉시 추가 → 같은 요청 사이클 내 응답부터 반영.
+ * - 영속은 INSERT-only — 같은 URL이 여러 잡에서 신고되어도 분석용으로 모두 보관.
  *
- * 성능: bad_image_reports.imageUrl 컬럼에 index 있고, IN 절은 입력 URL 개수만큼
- * 룩업하므로 게임/회사 사진 수십 건 기준 ms 단위 비용.
+ * 신뢰 모델: 인증/레이트 리밋이 없어 spam 가능. v1에선 user trust를 가정하고
+ * 도배가 보이면 IP 기반 rate limit를 controller 단에 추가하면 됨.
  */
 @Injectable()
-export class BadImageService {
+export class BadImageService implements OnModuleInit {
   private readonly logger = new Logger(BadImageService.name);
+  private readonly blocked = new Set<string>();
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * urls 중 사용자 신고가 들어온 URL을 제거하고 원래 순서를 보존한 새 배열로 반환.
-   * 입력이 비어있으면 즉시 빈 배열을 돌려 DB 쿼리를 건너뛴다.
-   */
-  async filterUrls(urls: readonly string[]): Promise<string[]> {
-    if (urls.length === 0) return [];
+  async onModuleInit(): Promise<void> {
     try {
-      const reports = await this.prisma.badImageReport.findMany({
-        where: { imageUrl: { in: [...urls] } },
+      const rows = await this.prisma.badImageReport.findMany({
         select: { imageUrl: true },
       });
-      if (reports.length === 0) return [...urls];
-      const blocked = new Set(reports.map((r) => r.imageUrl));
-      return urls.filter((u) => !blocked.has(u));
+      for (const r of rows) this.blocked.add(r.imageUrl);
+      this.logger.log(`bad-image cache primed: ${this.blocked.size} url(s)`);
     } catch (err) {
-      // DB 일시 장애 시 보수적으로 전체 통과 — 신고된 이미지가 잠시 다시
-      // 보일 수는 있지만 잡 페이지 자체가 빈 상태가 되진 않게 한다.
-      this.logger.warn(`filterUrls DB error: ${String(err)}`);
-      return [...urls];
+      // DB 부팅 실패 시 빈 set으로 시작 — 다음 응답엔 필터링이 비활성 상태로 동작.
+      this.logger.warn(`bad-image cache prime 실패: ${String(err)}`);
     }
   }
 
-  /** 단일 URL이 신고됐는지 — 잘 안 쓰지만 호환 위해 유지. */
-  async isBlocked(url: string): Promise<boolean> {
-    if (!url) return false;
-    const row = await this.prisma.badImageReport
-      .findFirst({ where: { imageUrl: url }, select: { id: true } })
-      .catch(() => null);
-    return !!row;
+  isBlocked(url: string): boolean {
+    return this.blocked.has(url);
   }
 
-  /** 신고 1건 INSERT — 메모리 캐시 갱신은 더 이상 필요 없음(매 응답마다 DB 조회). */
+  /** 차단 URL을 제거하고 순서를 보존한 배열을 새로 반환. */
+  filterUrls(urls: readonly string[]): string[] {
+    if (this.blocked.size === 0) return [...urls];
+    return urls.filter((u) => !this.blocked.has(u));
+  }
+
   async report(
     imageUrl: string,
     jobId: string | null,
@@ -64,5 +54,6 @@ export class BadImageService {
         reason: reason ?? undefined,
       },
     });
+    this.blocked.add(imageUrl);
   }
 }
