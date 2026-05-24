@@ -49,6 +49,9 @@ export default async function StatsPage() {
         <a href="/stats" className="font-semibold text-gray-900">
           통계
         </a>
+        <a href="/portfolio" className="text-gray-600 hover:text-gray-900 hover:underline">
+          포트폴리오
+        </a>
       </nav>
 
       <h1 className="mb-6 text-2xl font-bold">멀티소스 적재 현황</h1>

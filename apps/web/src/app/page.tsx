@@ -72,6 +72,9 @@ export default async function Home({
         <a href="/stats" className="text-gray-600 hover:text-gray-900 hover:underline">
           통계
         </a>
+        <a href="/portfolio" className="text-gray-600 hover:text-gray-900 hover:underline">
+          포트폴리오
+        </a>
       </nav>
       <h1 className="mb-4 text-2xl font-bold">게임 원화 채용공고</h1>
       <form action="/" method="get" className="mb-6 flex items-center gap-2">

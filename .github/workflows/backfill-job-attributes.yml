@@ -1,0 +1,60 @@
+name: backfill-job-attributes
+
+# 일회성 backfill — derived 컬럼(experienceLevel/employmentType/locations/isRemote)과
+# normalizedKey/primaryJobId 가 NULL/빈값으로 남은 잡들을 tags+title 정규화 결과로 채운다.
+# workflow_dispatch만 — schedule 트리거 없음. UI에서 수동 실행.
+#
+# 안전성:
+#   - 스크립트가 dryRun 옵션 지원 (`--dry`). 환경변수 DRY=true 면 dry-run.
+#   - 모든 update는 100건 청크 + 30s timeout 트랜잭션.
+#   - 같은 잡을 여러 번 실행해도 동일한 산출 (idempotent).
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: 'dry-run (DB 갱신 안 함)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build shared types
+        run: pnpm --filter @bini/types build
+
+      - name: Prisma generate
+        run: pnpm --filter api exec prisma generate
+
+      - name: Build api
+        run: pnpm --filter api build
+
+      - name: Run backfill
+        run: |
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            node apps/api/dist/src/scripts/backfill-job-attributes.js --dry
+          else
+            node apps/api/dist/src/scripts/backfill-job-attributes.js
+          fi

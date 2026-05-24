@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Job, JobSource } from '@bini/types';
 import { JobImageCarousel } from './JobImageCarousel';
 import { CompanyAvatar } from './CompanyAvatar';
+import { PortfolioMatchBadge } from './PortfolioMatchBadge';
 import { deadlineBadge, parseDeadline } from '../lib/deadline';
 
 const SOURCE_LABEL: Record<JobSource, string> = {
@@ -86,6 +87,7 @@ export function JobCard({ job }: { job: Job }) {
           >
             잡플래닛 ↗
           </a>
+          <PortfolioMatchBadge job={job} />
         </div>
         <a
           href={job.detailUrl}

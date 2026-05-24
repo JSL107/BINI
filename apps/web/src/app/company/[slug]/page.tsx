@@ -65,6 +65,12 @@ export default async function CompanyPage({
         <Link href="/stats" className="text-gray-600 hover:text-gray-900 hover:underline">
           통계
         </Link>
+        <Link
+          href="/portfolio"
+          className="text-gray-600 hover:text-gray-900 hover:underline"
+        >
+          포트폴리오
+        </Link>
       </nav>
 
       <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
