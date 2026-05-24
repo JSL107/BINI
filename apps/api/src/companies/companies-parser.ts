@@ -47,12 +47,38 @@ export function parseCareerSitesMarkdown(md: string): CareerSiteLink[] {
 
     const m = raw.match(LINK_LINE);
     if (!m) continue;
-    const name = m[1].trim();
+    const rawName = m[1].trim();
     const url = m[2].trim();
-    if (!name || !url) continue;
+    if (!rawName || !url) continue;
     if (!/^https?:\/\//i.test(url)) continue;
+    if (isDeadSite(rawName, url)) continue;
+    const name = cleanName(rawName);
+    if (!name) continue;
     sites.push({ name, url, category });
   }
 
   return sites;
+}
+
+/**
+ * 외부 README가 자주 덧붙이는 보조 텍스트 — `(보너스 지급)`, `(보 지급)` 등
+ * 채용 광고성 멘트를 이름에서 제거한다. 한글/영문 괄호 모두 처리.
+ */
+function cleanName(name: string): string {
+  return name
+    .replace(/[\(（][^)）]*?(?:지급|보너스|이벤트|추천|혜택)[^)）]*[\)）]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * 운영 종료/장기 미관리로 알려진 사이트는 표시에서 제외한다.
+ * 외부 README가 갱신될 때까지의 임시 필터 — 살아난 게 확인되면 목록에서 빼면 됨.
+ */
+function isDeadSite(name: string, url: string): boolean {
+  const lowerUrl = url.toLowerCase();
+  // 프로그래머스 채용은 2024년 서비스 종료(career.programmers.co.kr 도메인 자체가 만료).
+  if (/프로그래머스/.test(name)) return true;
+  if (lowerUrl.includes('career.programmers')) return true;
+  return false;
 }
