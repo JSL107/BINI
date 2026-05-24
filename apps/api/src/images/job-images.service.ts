@@ -4,6 +4,8 @@ import { NamuwikiImageService } from '../image/namuwiki-image.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GamejobDetailService } from '../scraper/gamejob-detail.service';
 import { WantedDetailService } from '../scraper/wanted-detail.service';
+import { JobkoreaDetailService } from '../scraper/jobkorea-detail.service';
+import { IncruitDetailService } from '../scraper/incruit-detail.service';
 import type { JobDetailExtract } from '../scraper/gamejob-detail-parser';
 import { BadImageService } from './bad-image.service';
 import { ImagesService } from './images.service';
@@ -30,6 +32,8 @@ export class JobImagesService {
     private readonly prisma: PrismaService,
     private readonly gamejobDetail: GamejobDetailService,
     private readonly wantedDetail: WantedDetailService,
+    private readonly jobkoreaDetail: JobkoreaDetailService,
+    private readonly incruitDetail: IncruitDetailService,
     private readonly images: ImagesService,
     private readonly namuwiki: NamuwikiImageService,
     private readonly badImage: BadImageService,
@@ -37,6 +41,8 @@ export class JobImagesService {
     this.detailFetchers = {
       gamejob: this.gamejobDetail,
       wanted: this.wantedDetail,
+      jobkorea: this.jobkoreaDetail,
+      incruit: this.incruitDetail,
     };
   }
 

@@ -5,8 +5,10 @@ import { GamejobDetailService } from '../scraper/gamejob-detail.service';
 import { WantedScraperService } from '../scraper/wanted-scraper.service';
 import { WantedDetailService } from '../scraper/wanted-detail.service';
 import { JobkoreaScraperService } from '../scraper/jobkorea-scraper.service';
+import { JobkoreaDetailService } from '../scraper/jobkorea-detail.service';
 import { SaraminScraperService } from '../scraper/saramin-scraper.service';
 import { IncruitScraperService } from '../scraper/incruit-scraper.service';
+import { IncruitDetailService } from '../scraper/incruit-detail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { JobDetailExtract } from '../scraper/gamejob-detail-parser';
 import { parseTitle } from '../title/title-parser';
@@ -73,11 +75,15 @@ export class JobsCronService {
     private readonly prisma: PrismaService,
     private readonly gamejobDetail: GamejobDetailService,
     private readonly wantedDetail: WantedDetailService,
+    private readonly jobkoreaDetail: JobkoreaDetailService,
+    private readonly incruitDetail: IncruitDetailService,
   ) {
     this.scrapers = [gamejob, wanted, jobkorea, saramin, incruit];
     this.detailFetchers = {
       gamejob: this.gamejobDetail,
       wanted: this.wantedDetail,
+      jobkorea: this.jobkoreaDetail,
+      incruit: this.incruitDetail,
     };
   }
 
