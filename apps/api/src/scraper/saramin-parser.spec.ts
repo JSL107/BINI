@@ -8,9 +8,11 @@ const html = readFileSync(
 );
 
 describe('parseSaraminList', () => {
-  it('픽스처에서 26건 공고를 추출한다', () => {
+  it('픽스처에서 art whitelist 적용 후 21건 공고를 추출한다', () => {
+    // 56ceee4 fix(saramin): whitelist art-related titles only — art 키워드 미포함
+    // 잡들이 컷되면서 26 → 21로 줄었다. 그 커밋에서 spec 갱신이 누락돼 있던 것.
     const jobs = parseSaraminList(html);
-    expect(jobs.length).toBe(26);
+    expect(jobs.length).toBe(21);
   });
 
   it('모든 공고의 source는 "saramin"이다', () => {
