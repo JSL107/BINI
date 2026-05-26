@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import type { JobsResponse } from '@bini/types';
+import type { JobsResponse, JobsSort } from '@bini/types';
 import { JobsCronService, type JobsQuery } from './jobs-cron.service';
 import {
   parseEmploymentTypeQuery,
@@ -15,8 +15,8 @@ export class JobsController {
   constructor(private readonly jobsCron: JobsCronService) {}
 
   /**
-   * GET /api/jobs?page=N&q=...&experience=...&employmentType=...&location=...&remote=true
-   * DB에 적재된 공고 N페이지를 등록일순으로 반환한다.
+   * GET /api/jobs?page=N&q=...&experience=...&employmentType=...&location=...&remote=true&sort=...
+   * DB에 적재된 공고 N페이지를 정렬(기본 등록일순)에 따라 반환한다.
    * 외부 스크래퍼 호출은 일어나지 않으며(요청 경로에서는), 모든 스크래핑은
    * GitHub Actions cron이 별도로 수행해 DB에 채워둔다. Vercel 함수 timeout 안전.
    *
@@ -26,6 +26,7 @@ export class JobsController {
    * experience/employmentType/location은 CSV 또는 반복 쿼리 둘 다 허용.
    * 알려진 값만 통과(unknown은 silently drop). 빈 결과는 필터 미적용으로 해석.
    * remote는 'true'일 때만 isRemote=true 필터링.
+   * sort는 'recent'(기본) | 'deadline-soonest'(마감 임박순). 알려지지 않은 값은 recent로 폴백.
    */
   @Get()
   async getJobs(
@@ -35,6 +36,7 @@ export class JobsController {
     @Query('employmentType') employmentType?: string | string[],
     @Query('location') location?: string | string[],
     @Query('remote') remote?: string | string[],
+    @Query('sort') sort?: string | string[],
   ): Promise<JobsResponse> {
     const rawValue = Array.isArray(page) ? page[0] : page;
     const raw = (rawValue ?? '').trim();
@@ -45,13 +47,21 @@ export class JobsController {
     const qValue = Array.isArray(q) ? q[0] : q;
     const search = (qValue ?? '').trim().slice(0, 200);
     const remoteValue = Array.isArray(remote) ? remote[0] : remote;
+    const sortValue = Array.isArray(sort) ? sort[0] : sort;
     const opts: JobsQuery = {
       search: search || undefined,
       experience: parseExperienceQuery(experience),
       employmentType: parseEmploymentTypeQuery(employmentType),
       location: parseLocationQuery(location),
       remote: remoteValue === 'true',
+      sort: parseSort(sortValue),
     };
     return this.jobsCron.getJobsFromDb(pageNum, undefined, opts);
   }
+}
+
+/** sort 쿼리 파라미터 sanitizer. 알려진 값만 통과, 나머지는 undefined(기본=recent). */
+function parseSort(raw: string | undefined): JobsSort | undefined {
+  if (raw === 'recent' || raw === 'deadline-soonest') return raw;
+  return undefined;
 }

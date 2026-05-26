@@ -26,7 +26,7 @@ export function parseDeadline(
   if (!trimmed) return { kind: 'unknown' };
 
   // 상시/수시/채용시 등 무한 마감 — 게임잡 표기 다수.
-  if (/상시|수시|채용\s*시/.test(trimmed)) return { kind: 'always' };
+  if (isAlwaysText(trimmed)) return { kind: 'always' };
 
   // YYYY-MM-DD 우선 매칭 (가장 명확).
   const ym = trimmed.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
@@ -101,4 +101,35 @@ export function deadlineBadge(status: DeadlineStatus): DeadlineBadge {
   if (d <= 3) return 'urgent';
   if (d <= 7) return 'soon';
   return 'normal';
+}
+
+function isAlwaysText(s: string): boolean {
+  return /상시|수시|채용\s*시/.test(s);
+}
+
+/**
+ * 서버가 cron 시점에 파싱해둔 `deadlineAt`(ISO 문자열)을 우선 사용해 상태를 만든다.
+ * 서버 값이 null이면 원본 `deadline` 텍스트를 클라이언트 측에서 재파싱한다.
+ *
+ * 사용 이유: cron이 본 시점과 사용자가 본 시점이 다를 수 있으나, 정확도는 클라이언트
+ * 재파싱보다 서버가 보유한 (그리고 정렬·필터에 동일하게 쓰인) Date가 더 신뢰 가능.
+ * 클라이언트 재파싱은 서버 컬럼이 NULL("상시"/파싱불가)인 경우의 폴백으로만 사용.
+ */
+export function deadlineStatusFromJob(
+  job: { deadline?: string | null; deadlineAt?: string | null },
+  now: Date = new Date(),
+): DeadlineStatus {
+  if (job.deadlineAt) {
+    const t = Date.parse(job.deadlineAt);
+    if (!Number.isNaN(t)) {
+      return finalize(new Date(t), now);
+    }
+  }
+  // 서버가 deadlineAt을 null로 둔 경우:
+  //  1) "상시"라서 의도된 null — 'always'로 분류.
+  //  2) 파싱 실패 — 클라이언트 측 폴백 파싱 시도(과거에 잘 동작하던 텍스트도 있어 의미 있음).
+  const trimmed = (job.deadline ?? '').trim();
+  if (!trimmed) return { kind: 'unknown' };
+  if (isAlwaysText(trimmed)) return { kind: 'always' };
+  return parseDeadline(trimmed, now);
 }

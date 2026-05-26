@@ -1,4 +1,9 @@
-import type { JobSource, StatsResponse } from '@bini/types';
+import type {
+  CronRunStatus,
+  CronRunSummary,
+  JobSource,
+  StatsResponse,
+} from '@bini/types';
 import {
   ActiveBySourceBars,
   TopCompaniesChart,
@@ -123,12 +128,99 @@ export default async function StatsPage() {
             />
           </section>
 
+          {stats.recentCronRuns && stats.recentCronRuns.length > 0 && (
+            <section className="mb-8">
+              <h2 className="mb-3 text-lg font-semibold text-gray-800">
+                최근 cron 실행 이력
+              </h2>
+              <RecentCronRunsTable runs={stats.recentCronRuns} />
+            </section>
+          )}
+
           <p className="text-xs text-gray-400">
             마지막 갱신 {new Date(stats.generatedAt).toLocaleTimeString('ko-KR')} · 1분 캐시
           </p>
         </>
       )}
     </main>
+  );
+}
+
+const CRON_STATUS_STYLE: Record<CronRunStatus, { label: string; cls: string }> = {
+  success: { label: '성공', cls: 'bg-green-100 text-green-700' },
+  partial_failure: { label: '부분실패', cls: 'bg-amber-100 text-amber-700' },
+  total_failure: { label: '전체실패', cls: 'bg-red-100 text-red-700' },
+  crashed: { label: '크래시', cls: 'bg-red-200 text-red-800' },
+};
+
+function RecentCronRunsTable({ runs }: { runs: CronRunSummary[] }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+      <table className="min-w-full text-left text-sm">
+        <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+          <tr>
+            <th className="px-3 py-2">시작</th>
+            <th className="px-3 py-2">상태</th>
+            <th className="px-3 py-2 text-right">소요</th>
+            <th className="px-3 py-2 text-right">페이지</th>
+            <th className="px-3 py-2 text-right">신규</th>
+            <th className="px-3 py-2 text-right">dedup</th>
+            <th className="px-3 py-2 text-right">만료</th>
+            <th className="px-3 py-2 text-right">상세 갱신</th>
+            <th className="px-3 py-2">실패 소스</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((r) => {
+            const s = CRON_STATUS_STYLE[r.status];
+            return (
+              <tr key={r.id} className="border-t border-gray-100">
+                <td className="whitespace-nowrap px-3 py-2 text-gray-700">
+                  {new Date(r.startedAt).toLocaleString('ko-KR', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </td>
+                <td className="px-3 py-2">
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-xs font-medium ${s.cls}`}
+                    title={r.errorMessage ?? undefined}
+                  >
+                    {s.label}
+                  </span>
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-600">
+                  {r.durationMs != null ? `${(r.durationMs / 1000).toFixed(1)}s` : '—'}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-gray-700">
+                  {r.pagesProcessed}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-blue-700">
+                  {r.newTotal}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-gray-600">
+                  {r.dedupedTotal}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-gray-500">
+                  {r.expiredSwept}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-gray-500">
+                  {r.detailRescrapeUpdated}/{r.detailRescrapeAttempted}
+                  {r.detailRescrapeFailed > 0 && (
+                    <span className="ml-1 text-red-600">!{r.detailRescrapeFailed}</span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-xs text-gray-500">
+                  {r.failedSources.length > 0 ? r.failedSources.join(', ') : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

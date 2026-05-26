@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import type { JobsSort } from '@bini/types';
 import { fetchJobs, type JobsQueryOptions } from '../lib/api';
 import { JobsGridWithFilter } from '../components/JobsGridWithFilter';
 import { Pagination } from '../components/Pagination';
@@ -18,6 +19,11 @@ function splitCsv(v: string | undefined): string[] {
   return v.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
 }
 
+function parseSort(raw: string | undefined): JobsSort {
+  if (raw === 'deadline-soonest') return 'deadline-soonest';
+  return 'recent';
+}
+
 export default async function Home({
   searchParams,
 }: {
@@ -28,6 +34,7 @@ export default async function Home({
     employmentType?: string | string[];
     location?: string | string[];
     remote?: string | string[];
+    sort?: string | string[];
   }>;
 }) {
   const sp = await searchParams;
@@ -37,10 +44,12 @@ export default async function Home({
   const empParam = firstParam(sp.employmentType);
   const locParam = firstParam(sp.location);
   const remoteParam = firstParam(sp.remote);
+  const sortParam = firstParam(sp.sort);
 
   const parsed = parseInt(pageParam ?? '1', 10);
   const page = Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
   const search = (qParam ?? '').trim().slice(0, 200);
+  const sort = parseSort(sortParam);
 
   const opts: JobsQueryOptions = {
     search: search || undefined,
@@ -48,17 +57,32 @@ export default async function Home({
     employmentType: splitCsv(empParam),
     location: splitCsv(locParam),
     remote: remoteParam === 'true',
+    sort,
   };
 
   const data = await fetchJobs(page, opts);
 
-  // 페이지 링크가 모든 필터를 보존하도록 extraQuery 합성.
+  // 페이지 링크가 모든 필터·정렬을 보존하도록 extraQuery 합성.
   const extraQuery: Record<string, string | undefined> = {
     experience: expParam,
     employmentType: empParam,
     location: locParam,
     remote: remoteParam === 'true' ? 'true' : undefined,
+    sort: sort === 'recent' ? undefined : sort,
   };
+
+  // 정렬 토글용 링크 URL — 현재 필터를 보존하며 sort만 교체. page는 1로 리셋.
+  function sortHref(target: JobsSort): string {
+    const params = new URLSearchParams();
+    if (search) params.set('q', search);
+    if (expParam) params.set('experience', expParam);
+    if (empParam) params.set('employmentType', empParam);
+    if (locParam) params.set('location', locParam);
+    if (remoteParam === 'true') params.set('remote', 'true');
+    if (target !== 'recent') params.set('sort', target);
+    const qs = params.toString();
+    return qs ? `/?${qs}` : '/';
+  }
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
@@ -109,6 +133,32 @@ export default async function Home({
       <Suspense fallback={<div className="mb-4 h-32 animate-pulse rounded-lg bg-gray-100" />}>
         <AttributeFilterBar />
       </Suspense>
+      <div className="mb-4 flex items-center gap-2 text-sm">
+        <span className="text-gray-500">정렬</span>
+        <a
+          href={sortHref('recent')}
+          aria-current={sort === 'recent' ? 'true' : undefined}
+          className={`rounded-full px-3 py-1 text-xs font-medium ${
+            sort === 'recent'
+              ? 'bg-blue-600 text-white'
+              : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          최신 등록순
+        </a>
+        <a
+          href={sortHref('deadline-soonest')}
+          aria-current={sort === 'deadline-soonest' ? 'true' : undefined}
+          className={`rounded-full px-3 py-1 text-xs font-medium ${
+            sort === 'deadline-soonest'
+              ? 'bg-blue-600 text-white'
+              : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+          title="마감일이 가까운 공고가 먼저. 상시·파싱불가는 뒤로."
+        >
+          마감 임박순
+        </a>
+      </div>
       {search && (
         <p className="mb-4 text-sm text-gray-500">
           “{search}” 검색 결과 — 총 {data.jobs.length}건 (페이지 {data.page} / {data.totalPages})
