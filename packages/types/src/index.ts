@@ -25,6 +25,12 @@ export interface Job {
   title: string;
   detailUrl: string;
   deadline: string;
+  /**
+   * cron 시점에 `deadline` 텍스트를 파싱한 결과(ISO 8601, UTC). "상시"/"채용시"처럼
+   * 날짜로 환산 불가하거나 파싱 실패한 경우 null. 같은 텍스트라도 사이트별 포맷이
+   * 들쭉날쭉이라 정확도 100%는 아니지만 정렬·필터·알림의 기준 컬럼으로 사용한다.
+   */
+  deadlineAt: string | null;
   registeredAt: string; // ISO 8601
   tags: string[];
   gameTitle: string | null;
@@ -55,6 +61,14 @@ export interface JobsResponse {
   jobs: Job[];
   failedSources?: JobSource[]; // 일부 소스 실패 시 메타로 노출
 }
+
+/**
+ * 잡 목록 정렬 옵션.
+ * - 'recent'           : 등록일 desc (기본)
+ * - 'deadline-soonest' : 마감 임박순. 'always'/null deadlineAt은 후순위로 밀려나고,
+ *                        expired는 제외하지 않되 가장 뒤로 보낸다.
+ */
+export type JobsSort = 'recent' | 'deadline-soonest';
 
 export interface GameImageResponse {
   query: string;

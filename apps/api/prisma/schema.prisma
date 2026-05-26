@@ -19,6 +19,9 @@ model Job {
   title          String
   detailUrl      String
   deadline       String   // 원문 텍스트: "상시" · "채용시" · "04/03(금)" 등 — 날짜가 아닐 수 있어 String 유지
+  /// `deadline` 텍스트를 cron 시점에 파싱한 결과. "상시"/파싱불가는 null.
+  /// 마감 임박 정렬·필터·알림의 기준 컬럼. 인덱스로 sort/where 가속.
+  deadlineAt     DateTime? @db.Timestamptz(3)
   registeredAt   DateTime @db.Timestamptz(3)
   tags           String[]
   gameTitle      String?
@@ -53,6 +56,7 @@ model Job {
   isRemote        Boolean  @default(false)
 
   @@index([registeredAt])
+  @@index([deadlineAt])
   @@index([expiredAt])
   @@index([source])
   @@index([normalizedKey])
