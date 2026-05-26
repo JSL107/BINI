@@ -120,6 +120,37 @@ model JobplanetCompany {
   @@map("jobplanet_companies")
 }
 
+// cron 실행 이력 ledger — GitHub Actions `refresh-jobs.yml`가 실행될 때마다 한 줄.
+// 운영 가시성: 실행 빈도/지속시간/실패율, 소스별 페이지 적재 추세를 한 테이블로 추적.
+// status:
+//   'success'         — totalFailure 없이 정상 완료
+//   'partial_failure' — 일부 페이지에서 일부 소스 실패. 적재는 진행됨.
+//   'total_failure'   — 어느 페이지에서 모든 소스가 동시 실패. 적재 중단.
+//   'crashed'         — main 함수가 예외로 종료. errorMessage 참조.
+model CronRun {
+  id                       String   @id @default(cuid())
+  startedAt                DateTime @default(now()) @db.Timestamptz(3)
+  finishedAt               DateTime? @db.Timestamptz(3)
+  status                   String
+  pagesProcessed           Int      @default(0)
+  scrapedTotal             Int      @default(0)
+  dedupedTotal             Int      @default(0)
+  newTotal                 Int      @default(0)
+  expiredSwept             Int      @default(0)
+  detailRescrapeAttempted  Int      @default(0)
+  detailRescrapeUpdated    Int      @default(0)
+  detailRescrapeFailed     Int      @default(0)
+  /// 사이클 전체에서 한 번 이상 실패한 소스 합집합. 'gamejob' | 'wanted' | ...
+  failedSources            String[] @default([])
+  /// crashed 상태일 때만 의미 있음. 메시지는 첫 140자만.
+  errorMessage             String?
+  /// finishedAt - startedAt(ms). crashed에서도 가능하면 채움.
+  durationMs               Int?
+
+  @@index([startedAt])
+  @@map("cron_runs")
+}
+
 // 나무위키 게임 페이지 대표 이미지 캐시 — `apps/crawler`가 cron으로 채운다.
 // 키는 정규화된 게임명(공백/대소문자 그대로, '게임' suffix 없는 원형). api는 read-only.
 // status:
