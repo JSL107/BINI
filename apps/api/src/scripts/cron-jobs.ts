@@ -144,6 +144,13 @@ async function main() {
       );
     await app.close().catch(() => undefined);
   }
+
+  // total_failure는 catch를 거치지 않고 break로 정상 종료된다(ledger 닫음).
+  // 그러나 운영상 "모든 소스 동시 실패"는 워크플로우 빨간불을 띄워야 한다.
+  // crashed는 catch에서 이미 re-throw하므로 여기선 total_failure만 처리.
+  if (status === 'total_failure') {
+    throw new Error(`cron total_failure: ${errorMessage ?? 'unknown'}`);
+  }
 }
 
 main().catch((err) => {
