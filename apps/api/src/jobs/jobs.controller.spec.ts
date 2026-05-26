@@ -10,13 +10,14 @@ describe('JobsController', () => {
     return { controller: new JobsController(service), getJobsFromDb };
   }
 
-  // 신규 시그니처: (page, undefined, opts) — opts는 search/experience/employmentType/location/remote.
+  // 신규 시그니처: (page, undefined, opts) — opts는 search/experience/employmentType/location/remote/sort.
   const emptyOpts = {
     search: undefined,
     experience: [],
     employmentType: [],
     location: [],
     remote: false,
+    sort: undefined,
   };
 
   it('page 쿼리를 정수로 서비스에 전달한다', async () => {
@@ -116,5 +117,70 @@ describe('JobsController', () => {
     const call = getJobsFromDb.mock.calls[0];
     const opts = call[2] as { search?: string };
     expect(opts.search?.length).toBe(200);
+  });
+
+  it("sort='deadline-soonest'를 그대로 전달", async () => {
+    const { controller, getJobsFromDb } = build();
+    await controller.getJobs(
+      '1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'deadline-soonest',
+    );
+    expect(getJobsFromDb).toHaveBeenCalledWith(1, undefined, {
+      ...emptyOpts,
+      sort: 'deadline-soonest',
+    });
+  });
+
+  it("sort='recent'는 명시 전달", async () => {
+    const { controller, getJobsFromDb } = build();
+    await controller.getJobs(
+      '1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'recent',
+    );
+    expect(getJobsFromDb).toHaveBeenCalledWith(1, undefined, {
+      ...emptyOpts,
+      sort: 'recent',
+    });
+  });
+
+  it('알 수 없는 sort 값은 undefined로 폴백', async () => {
+    const { controller, getJobsFromDb } = build();
+    await controller.getJobs(
+      '1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'random-sort',
+    );
+    expect(getJobsFromDb).toHaveBeenCalledWith(1, undefined, emptyOpts);
+  });
+
+  it('sort 배열로 들어오면 첫 값만 사용', async () => {
+    const { controller, getJobsFromDb } = build();
+    await controller.getJobs(
+      '1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ['deadline-soonest', 'recent'],
+    );
+    expect(getJobsFromDb).toHaveBeenCalledWith(1, undefined, {
+      ...emptyOpts,
+      sort: 'deadline-soonest',
+    });
   });
 });
