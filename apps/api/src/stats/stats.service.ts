@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type {
   CompanyCount,
+  CronRunStatus,
+  CronRunSummary,
   JobSource,
   StatsResponse,
   WeeklyTrendPoint,
@@ -10,6 +12,14 @@ import { PrismaService } from '../prisma/prisma.service';
 const ALL_SOURCES: JobSource[] = ['gamejob', 'wanted', 'jobkorea', 'saramin', 'incruit'];
 const WEEKLY_TREND_WEEKS = 12;
 const TOP_COMPANIES_LIMIT = 20;
+/** /api/stats 응답에 포함할 최근 cron 실행 이력 상한. */
+const RECENT_CRON_RUNS_LIMIT = 20;
+const CRON_STATUSES: ReadonlySet<string> = new Set<CronRunStatus>([
+  'success',
+  'partial_failure',
+  'total_failure',
+  'crashed',
+]);
 
 @Injectable()
 export class StatsService {
@@ -29,6 +39,7 @@ export class StatsService {
       enrichedCount,
       activeBySourceRows,
       topCompaniesRows,
+      cronRunRows,
     ] = await this.prisma.$transaction([
       this.prisma.job.groupBy({
         by: ['source'],
@@ -55,6 +66,10 @@ export class StatsService {
         orderBy: { _count: { id: 'desc' } },
         take: TOP_COMPANIES_LIMIT,
       }),
+      this.prisma.cronRun.findMany({
+        orderBy: { startedAt: 'desc' },
+        take: RECENT_CRON_RUNS_LIMIT,
+      }),
     ]);
 
     // weeklyTrend는 date_trunc + interval — Prisma groupBy로는 표현이 깔끔하지 않아 raw SQL.
@@ -67,6 +82,43 @@ export class StatsService {
     const topCompanies: CompanyCount[] = (
       topCompaniesRows as Array<{ company: string; _count: { _all: number } }>
     ).map((r) => ({ company: r.company, count: r._count._all }));
+
+    const recentCronRuns: CronRunSummary[] = (
+      cronRunRows as Array<{
+        id: string;
+        startedAt: Date;
+        finishedAt: Date | null;
+        status: string;
+        pagesProcessed: number;
+        scrapedTotal: number;
+        dedupedTotal: number;
+        newTotal: number;
+        expiredSwept: number;
+        detailRescrapeAttempted: number;
+        detailRescrapeUpdated: number;
+        detailRescrapeFailed: number;
+        failedSources: string[];
+        errorMessage: string | null;
+        durationMs: number | null;
+      }>
+    ).map((r) => ({
+      id: r.id,
+      startedAt: r.startedAt.toISOString(),
+      finishedAt: r.finishedAt ? r.finishedAt.toISOString() : null,
+      // 알려지지 않은 status 값은 'crashed'로 폴백 — 신호 보존(이상 상태로 노출).
+      status: (CRON_STATUSES.has(r.status) ? r.status : 'crashed') as CronRunStatus,
+      pagesProcessed: r.pagesProcessed,
+      scrapedTotal: r.scrapedTotal,
+      dedupedTotal: r.dedupedTotal,
+      newTotal: r.newTotal,
+      expiredSwept: r.expiredSwept,
+      detailRescrapeAttempted: r.detailRescrapeAttempted,
+      detailRescrapeUpdated: r.detailRescrapeUpdated,
+      detailRescrapeFailed: r.detailRescrapeFailed,
+      failedSources: r.failedSources,
+      errorMessage: r.errorMessage,
+      durationMs: r.durationMs,
+    }));
 
     return {
       total: totalCount,
@@ -81,6 +133,7 @@ export class StatsService {
       weeklyTrend,
       topCompanies,
       activeBySource,
+      recentCronRuns,
     };
   }
 
