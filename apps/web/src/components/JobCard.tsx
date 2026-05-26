@@ -3,7 +3,7 @@ import type { Job, JobSource } from '@bini/types';
 import { JobImageCarousel } from './JobImageCarousel';
 import { CompanyAvatar } from './CompanyAvatar';
 import { PortfolioMatchBadge } from './PortfolioMatchBadge';
-import { deadlineBadge, parseDeadline } from '../lib/deadline';
+import { deadlineBadge, deadlineStatusFromJob } from '../lib/deadline';
 
 const SOURCE_LABEL: Record<JobSource, string> = {
   gamejob: '게임잡',
@@ -26,7 +26,8 @@ function jobplanetSearchUrl(company: string): string {
 }
 
 export function JobCard({ job }: { job: Job }) {
-  const deadline = parseDeadline(job.deadline);
+  // 서버 cron이 채워둔 job.deadlineAt을 우선 사용. NULL이면 원본 텍스트로 폴백.
+  const deadline = deadlineStatusFromJob(job);
   const badge = deadlineBadge(deadline);
   return (
     <article

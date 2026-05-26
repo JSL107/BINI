@@ -5,6 +5,7 @@ import type {
   JobImagesResponse,
   CareerSitesResponse,
   CompanyDetailResponse,
+  JobsSort,
 } from '@bini/types';
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api';
@@ -19,6 +20,8 @@ export interface JobsQueryOptions {
   location?: string[];
   /** true일 때만 isRemote=true 필터. false/undefined는 무필터. */
   remote?: boolean;
+  /** 정렬. 미지정 시 서버 기본('recent'). */
+  sort?: JobsSort;
 }
 
 export async function fetchJobs(
@@ -37,6 +40,8 @@ export async function fetchJobs(
     params.set('location', opts.location.join(','));
   }
   if (opts.remote === true) params.set('remote', 'true');
+  // recent는 기본값이라 굳이 전송하지 않음 — URL 깔끔하게 유지.
+  if (opts.sort && opts.sort !== 'recent') params.set('sort', opts.sort);
   // 30s 데이터 캐시 — cron이 잡 갱신을 3h 주기로 돌리므로 30s 지연은 안전.
   // 같은 page+필터 조합 첫 사용자만 cold path를 타고 그 후 30초 동안은
   // Vercel Edge가 즉시 응답.
