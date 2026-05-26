@@ -25,6 +25,7 @@ import type { RawJob } from '../scraper/raw-job';
 import { groupRawJobs } from './dedupe';
 import { computeAttributes } from './job-attributes';
 import { parseDeadlineToDate } from './deadline-parser';
+import { expandSearchTerms } from './synonyms';
 
 /** lastSeenAt이 이 값을 넘은 잡은 expired로 간주 (sweepExpired 임계값 + computeExpired 동적 계산 기준). */
 const EXPIRY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -428,10 +429,13 @@ export function buildJobsWhere(opts: JobsQuery): Record<string, unknown> {
   const where: Record<string, unknown> = { primaryJobId: null };
   const q = (opts.search ?? '').trim();
   if (q) {
-    where.OR = [
-      { title: { contains: q, mode: 'insensitive' as const } },
-      { company: { contains: q, mode: 'insensitive' as const } },
-    ];
+    // 동의어 확장: 단일 토큰("원화")이면 같은 그룹의 단어들도 OR로 매칭한다.
+    // 다중 토큰이거나 사전에 없는 단어는 그대로 한 항만 검색됨.
+    const terms = expandSearchTerms(q);
+    where.OR = terms.flatMap((t) => [
+      { title: { contains: t, mode: 'insensitive' as const } },
+      { company: { contains: t, mode: 'insensitive' as const } },
+    ]);
   }
   if (opts.experience && opts.experience.length > 0) {
     where.experienceLevel = { in: opts.experience };
