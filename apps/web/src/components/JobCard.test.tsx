@@ -23,6 +23,7 @@ const baseJob: Job = {
   title: '[p.일렌시아] 배경 도트 디자이너',
   detailUrl: 'https://www.gamejob.co.kr/Recruit/GI_Read/View?GI_No=278454',
   deadline: '상시',
+  deadlineAt: null,
   registeredAt: '2026-05-22T08:00:00.000Z',
   tags: ['신입', '경기'],
   gameTitle: 'p.일렌시아',

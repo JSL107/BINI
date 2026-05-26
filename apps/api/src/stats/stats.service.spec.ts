@@ -13,6 +13,7 @@ describe('StatsService.getStats', () => {
       activeBySource: Array<{ source: string; _count: { _all: number } }>;
       topCompanies: Array<{ company: string; _count: { _all: number } }>;
       weeklyTrendRows: Array<{ week_start: Date; count: bigint | number }>;
+      cronRuns: Array<Record<string, unknown>>;
     }> = {},
   ) {
     const bySource = overrides.bySource ?? [
@@ -38,11 +39,15 @@ describe('StatsService.getStats', () => {
       { week_start: new Date('2026-05-18T00:00:00Z'), count: 7n },
       { week_start: new Date('2026-05-11T00:00:00Z'), count: 3n },
     ];
+    const cronRuns = overrides.cronRuns ?? [];
 
     const job = {
       groupBy: jest.fn().mockReturnValue('groupByCall'),
       count: jest.fn().mockReturnValue('countCall'),
       findFirst: jest.fn().mockReturnValue('findFirstCall'),
+    };
+    const cronRun = {
+      findMany: jest.fn().mockReturnValue('cronRunFindMany'),
     };
     const $transaction = jest
       .fn()
@@ -55,9 +60,10 @@ describe('StatsService.getStats', () => {
         enrichedCount,
         activeBySource,
         topCompanies,
+        cronRuns,
       ]);
     const $queryRaw = jest.fn().mockResolvedValue(weeklyTrendRows);
-    const prisma = { job, $transaction, $queryRaw } as unknown as PrismaService;
+    const prisma = { job, cronRun, $transaction, $queryRaw } as unknown as PrismaService;
     return { service: new StatsService(prisma), $transaction, $queryRaw };
   }
 
@@ -176,5 +182,83 @@ describe('StatsService.getStats', () => {
     const { service } = build({ weeklyTrendRows: [] });
     const stats = await service.getStats();
     expect(stats.weeklyTrend).toEqual([]);
+  });
+
+  it('recentCronRuns는 ledger 행을 ISO/숫자로 매핑하고 입력 순서 보존', async () => {
+    const startedAt = new Date('2026-05-26T01:00:00Z');
+    const finishedAt = new Date('2026-05-26T01:00:43Z');
+    const { service } = build({
+      cronRuns: [
+        {
+          id: 'run-1',
+          startedAt,
+          finishedAt,
+          status: 'success',
+          pagesProcessed: 5,
+          scrapedTotal: 100,
+          dedupedTotal: 80,
+          newTotal: 12,
+          expiredSwept: 3,
+          detailRescrapeAttempted: 100,
+          detailRescrapeUpdated: 95,
+          detailRescrapeFailed: 5,
+          failedSources: [],
+          errorMessage: null,
+          durationMs: 43000,
+        },
+      ],
+    });
+    const stats = await service.getStats();
+    expect(stats.recentCronRuns).toEqual([
+      {
+        id: 'run-1',
+        startedAt: '2026-05-26T01:00:00.000Z',
+        finishedAt: '2026-05-26T01:00:43.000Z',
+        status: 'success',
+        pagesProcessed: 5,
+        scrapedTotal: 100,
+        dedupedTotal: 80,
+        newTotal: 12,
+        expiredSwept: 3,
+        detailRescrapeAttempted: 100,
+        detailRescrapeUpdated: 95,
+        detailRescrapeFailed: 5,
+        failedSources: [],
+        errorMessage: null,
+        durationMs: 43000,
+      },
+    ]);
+  });
+
+  it('알 수 없는 cron status는 "crashed"로 폴백 (이상 상태 노출)', async () => {
+    const { service } = build({
+      cronRuns: [
+        {
+          id: 'x',
+          startedAt: new Date('2026-05-26T01:00:00Z'),
+          finishedAt: null,
+          status: 'mystery',
+          pagesProcessed: 0,
+          scrapedTotal: 0,
+          dedupedTotal: 0,
+          newTotal: 0,
+          expiredSwept: 0,
+          detailRescrapeAttempted: 0,
+          detailRescrapeUpdated: 0,
+          detailRescrapeFailed: 0,
+          failedSources: [],
+          errorMessage: null,
+          durationMs: null,
+        },
+      ],
+    });
+    const stats = await service.getStats();
+    expect(stats.recentCronRuns[0].status).toBe('crashed');
+  });
+
+  it('cronRuns가 비어 있어도 빈 배열로 반환', async () => {
+    const { service } = build({ cronRuns: [] });
+    const stats = await service.getStats();
+    expect(stats.recentCronRuns).toEqual([]);
   });
 });

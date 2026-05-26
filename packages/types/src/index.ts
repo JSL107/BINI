@@ -25,6 +25,12 @@ export interface Job {
   title: string;
   detailUrl: string;
   deadline: string;
+  /**
+   * cron 시점에 `deadline` 텍스트를 파싱한 결과(ISO 8601, UTC). "상시"/"채용시"처럼
+   * 날짜로 환산 불가하거나 파싱 실패한 경우 null. 같은 텍스트라도 사이트별 포맷이
+   * 들쭉날쭉이라 정확도 100%는 아니지만 정렬·필터·알림의 기준 컬럼으로 사용한다.
+   */
+  deadlineAt: string | null;
   registeredAt: string; // ISO 8601
   tags: string[];
   gameTitle: string | null;
@@ -55,6 +61,14 @@ export interface JobsResponse {
   jobs: Job[];
   failedSources?: JobSource[]; // 일부 소스 실패 시 메타로 노출
 }
+
+/**
+ * 잡 목록 정렬 옵션.
+ * - 'recent'           : 등록일 desc (기본)
+ * - 'deadline-soonest' : 마감 임박순. 'always'/null deadlineAt은 후순위로 밀려나고,
+ *                        expired는 제외하지 않되 가장 뒤로 보낸다.
+ */
+export type JobsSort = 'recent' | 'deadline-soonest';
 
 export interface GameImageResponse {
   query: string;
@@ -160,6 +174,11 @@ export interface StatsResponse {
    * 카운트한 값. 모든 JobSource 키가 항상 존재(0이면 0).
    */
   activeBySource: Record<JobSource, number>;
+  /**
+   * 최근 cron 실행 이력 요약. startedAt desc로 정렬, 기본 20건 상한.
+   * 운영 가시성용 — 실패율, 평균 신규 건수, crash 추세 모니터링.
+   */
+  recentCronRuns: CronRunSummary[];
 }
 
 export interface WeeklyTrendPoint {
@@ -171,4 +190,36 @@ export interface WeeklyTrendPoint {
 export interface CompanyCount {
   company: string;
   count: number;
+}
+
+/**
+ * cron 실행 이력 한 행 요약. 운영 대시보드/상태 페이지에서 최근 N건을 표시한다.
+ *
+ * status:
+ *  - 'success'         : 정상 완료
+ *  - 'partial_failure' : 일부 소스 실패. 적재는 진행됨.
+ *  - 'total_failure'   : 한 페이지에서 모든 소스 동시 실패. 적재 중단.
+ *  - 'crashed'         : main 함수가 예외로 종료. errorMessage 참조.
+ */
+export type CronRunStatus = 'success' | 'partial_failure' | 'total_failure' | 'crashed';
+
+export interface CronRunSummary {
+  id: string;
+  startedAt: string; // ISO 8601
+  finishedAt: string | null;
+  status: CronRunStatus;
+  pagesProcessed: number;
+  scrapedTotal: number;
+  dedupedTotal: number;
+  newTotal: number;
+  expiredSwept: number;
+  detailRescrapeAttempted: number;
+  detailRescrapeUpdated: number;
+  detailRescrapeFailed: number;
+  /** 사이클 전체에서 한 번 이상 실패한 소스 합집합. */
+  failedSources: string[];
+  /** crashed 상태일 때만 의미 있음. 그 외엔 null. */
+  errorMessage: string | null;
+  /** finishedAt - startedAt(ms). 아직 끝나지 않은 ledger row면 null. */
+  durationMs: number | null;
 }

@@ -5,6 +5,7 @@ import type {
   Job,
   JobSource,
   JobsResponse,
+  JobsSort,
 } from '@bini/types';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { GamejobDetailService } from '../scraper/gamejob-detail.service';
@@ -23,6 +24,8 @@ import type { JobScraper } from '../scraper/scraper.interface';
 import type { RawJob } from '../scraper/raw-job';
 import { groupRawJobs } from './dedupe';
 import { computeAttributes } from './job-attributes';
+import { parseDeadlineToDate } from './deadline-parser';
+import { expandSearchTerms } from './synonyms';
 
 /** lastSeenAt이 이 값을 넘은 잡은 expired로 간주 (sweepExpired 임계값 + computeExpired 동적 계산 기준). */
 const EXPIRY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -62,6 +65,8 @@ export interface JobsQuery {
   location?: string[];
   /** true일 때만 isRemote=true인 잡만. false/undefined면 무필터. */
   remote?: boolean;
+  /** 정렬. 미지정/'recent'는 등록일 desc(기본), 'deadline-soonest'는 마감 임박순. */
+  sort?: JobsSort;
 }
 
 /** detail fetcher 시그니처 — `JobDetailExtract`를 반환하는 source별 어댑터. */
@@ -203,8 +208,10 @@ export class JobsCronService {
         const parsed = parseTitle(member.title, member.company);
         const registeredAt = parseRelativeTime(member.registeredAtText, now);
         const attrs = computeAttributes(member.tags, member.title);
+        const deadlineAt = parseDeadlineToDate(member.deadline, now);
         // registeredAt은 create에만 둔다 — 재스크래핑 시 상대시간 재계산값으로
         // 최초 등록시각을 덮어쓰면 정렬이 흔들리기 때문.
+        // deadlineAt은 매 cron 갱신 OK — 회사가 마감일을 미루는 경우 반영 필요.
         const common = {
           source: member.source,
           sourceId: member.sourceId,
@@ -213,6 +220,7 @@ export class JobsCronService {
           title: member.title,
           detailUrl: member.detailUrl,
           deadline: member.deadline,
+          deadlineAt,
           tags: member.tags,
           gameTitle: parsed.gameTitle,
           imageQuery: parsed.imageQuery,
@@ -266,12 +274,13 @@ export class JobsCronService {
     opts: JobsQuery = {},
   ): Promise<JobsResponse> {
     const where = buildJobsWhere(opts);
+    const orderBy = buildJobsOrderBy(opts.sort);
     const skip = (page - 1) * perPage;
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.job.count({ where }),
       this.prisma.job.findMany({
         where,
-        orderBy: [{ registeredAt: 'desc' }, { id: 'desc' }],
+        orderBy,
         skip,
         take: perPage,
         include: {
@@ -391,15 +400,42 @@ export class JobsCronService {
   }
 }
 
+/**
+ * 정렬 옵션 → Prisma orderBy 배열 변환.
+ * - 기본('recent'): 등록일 desc, id desc tiebreaker.
+ * - 'deadline-soonest':
+ *     1순위 `expiredAt asc nulls first` — 만료 안 된 잡(NULL)이 먼저, 만료된 잡은 뒤.
+ *     2순위 `deadlineAt asc nulls last` — 임박한 마감일이 먼저, "상시"(NULL)는 뒤.
+ *     3순위 `registeredAt desc` — 동일 마감일에서 최신 등록 우선.
+ *     4순위 `id desc` — 안정 정렬 tiebreaker.
+ *   Prisma 5+ 의 `nulls: 'first'|'last'` 옵션 사용.
+ */
+export function buildJobsOrderBy(
+  sort: JobsSort | undefined,
+): Array<Record<string, unknown>> {
+  if (sort === 'deadline-soonest') {
+    return [
+      { expiredAt: { sort: 'asc', nulls: 'first' } },
+      { deadlineAt: { sort: 'asc', nulls: 'last' } },
+      { registeredAt: 'desc' },
+      { id: 'desc' },
+    ];
+  }
+  return [{ registeredAt: 'desc' }, { id: 'desc' }];
+}
+
 /** Prisma where 객체를 JobsQuery에서 합성. primaryJobId: null은 항상 강제. */
 export function buildJobsWhere(opts: JobsQuery): Record<string, unknown> {
   const where: Record<string, unknown> = { primaryJobId: null };
   const q = (opts.search ?? '').trim();
   if (q) {
-    where.OR = [
-      { title: { contains: q, mode: 'insensitive' as const } },
-      { company: { contains: q, mode: 'insensitive' as const } },
-    ];
+    // 동의어 확장: 단일 토큰("원화")이면 같은 그룹의 단어들도 OR로 매칭한다.
+    // 다중 토큰이거나 사전에 없는 단어는 그대로 한 항만 검색됨.
+    const terms = expandSearchTerms(q);
+    where.OR = terms.flatMap((t) => [
+      { title: { contains: t, mode: 'insensitive' as const } },
+      { company: { contains: t, mode: 'insensitive' as const } },
+    ]);
   }
   if (opts.experience && opts.experience.length > 0) {
     where.experienceLevel = { in: opts.experience };
@@ -464,6 +500,7 @@ export function toJobDto(
     title: string;
     detailUrl: string;
     deadline: string;
+    deadlineAt?: Date | null;
     registeredAt: Date;
     tags: string[];
     gameTitle: string | null;
@@ -492,6 +529,7 @@ export function toJobDto(
     title: row.title,
     detailUrl: row.detailUrl,
     deadline: row.deadline,
+    deadlineAt: row.deadlineAt ? row.deadlineAt.toISOString() : null,
     registeredAt: row.registeredAt.toISOString(),
     tags: row.tags,
     gameTitle: row.gameTitle,
