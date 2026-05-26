@@ -126,6 +126,31 @@ model CronRun {
   @@map("cron_runs")
 }
 
+// 잡플래닛 회사 평판 캐시 — `apps/crawler`가 cron으로 채운다.
+// 키는 BINI Job.company 원문(공백/대소문자 그대로). api는 read-only.
+//
+// 매칭 전략:
+//   - 검색 URL: https://www.jobplanet.co.kr/search?query_type=company&query=<name>
+//   - 첫 회사 결과의 deep link(companyUrl)과 별점/리뷰 수/평균연봉을 추출.
+//   - 일치하는 회사를 못 찾거나(검색 결과 0건), 회사 페이지에서 평점 영역이
+//     비어 있으면 status='not_found'.
+//
+// status:
+//   'found'      — rating 채워짐(reviewCount/salaryAvg는 없을 수도 있음)
+//   'not_found'  — 검색 결과 없음 또는 회사 페이지에 평판 데이터 없음
+//   'blocked'    — 차단/봇 감지 (다음 크론에서 재시도)
+model JobplanetCompany {
+  companyName String   @id
+  companyUrl  String?
+  rating      Float?
+  reviewCount Int?
+  salaryAvg   Int?      // 평균연봉(만원). 데이터 없으면 null.
+  status      String
+  fetchedAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("jobplanet_companies")
+}
+
 // 나무위키 게임 페이지 대표 이미지 캐시 — `apps/crawler`가 cron으로 채운다.
 // 키는 정규화된 게임명(공백/대소문자 그대로, '게임' suffix 없는 원형). api는 read-only.
 // status:

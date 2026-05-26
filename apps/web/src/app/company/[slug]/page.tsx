@@ -98,12 +98,12 @@ export default async function CompanyPage({
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
             <a
-              href={jobplanetSearchUrl(data.name)}
+              href={data.jobplanet?.url ?? jobplanetSearchUrl(data.name)}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
             >
-              잡플래닛 평판 ↗
+              잡플래닛 {data.jobplanet?.url ? '회사 페이지' : '평판'} ↗
             </a>
             {data.externalCareerUrl && (
               <a
@@ -118,6 +118,51 @@ export default async function CompanyPage({
           </div>
         </div>
       </header>
+
+      {data.jobplanet && data.jobplanet.rating !== null && (
+        <section
+          aria-label="잡플래닛 평판 요약"
+          className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4"
+        >
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-bold text-amber-700">
+                ★ {data.jobplanet.rating.toFixed(1)}
+              </span>
+              <span className="text-xs text-gray-500">/ 5.0</span>
+            </div>
+            {data.jobplanet.reviewCount !== null && (
+              <div className="text-sm text-gray-700">
+                <span className="font-medium">{data.jobplanet.reviewCount.toLocaleString()}</span>
+                <span className="ml-1 text-gray-500">개의 기업리뷰</span>
+              </div>
+            )}
+            {data.jobplanet.salaryAvg !== null && (
+              <div className="text-sm text-gray-700">
+                <span className="text-gray-500">평균연봉</span>
+                <span className="ml-1 font-medium">
+                  {data.jobplanet.salaryAvg.toLocaleString()}만 원
+                </span>
+              </div>
+            )}
+            {data.jobplanet.url && (
+              <a
+                href={data.jobplanet.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto rounded text-sm text-amber-800 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              >
+                잡플래닛에서 더 보기 ↗
+              </a>
+            )}
+          </div>
+          {data.jobplanet.fetchedAt && (
+            <p className="mt-2 text-xs text-gray-400">
+              잡플래닛 캐시 — {new Date(data.jobplanet.fetchedAt).toLocaleDateString('ko-KR')} 수집
+            </p>
+          )}
+        </section>
+      )}
 
       {data.representativeGames.length > 0 && (
         <section className="mb-6">

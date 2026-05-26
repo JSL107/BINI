@@ -1,0 +1,41 @@
+name: refresh-jobplanet
+
+# 회사 평판(잡플래닛 별점/리뷰 수/평균연봉)을 매일 1회 크롤링한다.
+# 회사 단위 데이터는 시간 단위로 바뀌지 않으므로 image cron(3h)와 별도로 운영.
+# 잡플래닛은 봇 트래픽에 민감해 politeness 8~15s 지터를 둔다 — 200건 기준
+# 최대 ~50분 예상.
+
+on:
+  schedule:
+    # UTC '0 18 * * *' = 매일 03:00 KST. 트래픽이 가장 낮은 시간대.
+    - cron: '0 18 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Install Chromium
+        run: pnpm --filter crawler exec playwright install --with-deps chromium
+
+      - name: Run jobplanet crawler
+        env:
+          JOBPLANET_MAX_TARGETS: '200'
+        run: pnpm --filter crawler crawl:jobplanet
