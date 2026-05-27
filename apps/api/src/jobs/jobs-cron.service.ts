@@ -433,6 +433,20 @@ export class JobsCronService {
   }
 
   /**
+   * since 시각 이후 BINI가 처음 본(`firstSeenAt >= since`) primary 잡 수.
+   * 홈 헤더의 "지난 방문 이후 신규 N건" 뱃지가 사용한다.
+   * alias 잡은 제외(primaryJobId IS NULL) — 사용자가 보는 카드 단위로 카운트.
+   */
+  async getNewSinceCount(since: Date): Promise<number> {
+    return this.prisma.job.count({
+      where: {
+        firstSeenAt: { gte: since },
+        primaryJobId: null,
+      },
+    });
+  }
+
+  /**
    * lastSeenAt이 thresholdMs를 넘긴(또한 expiredAt이 아직 null인) 잡에 expiredAt을 채운다.
    * 응답상 expired는 computeExpired가 lastSeenAt 기반으로도 동적으로 true를 내지만,
    * 컬럼에 명시적으로 기록해두면 인덱스 활용·향후 정책 변경에 유리하다.

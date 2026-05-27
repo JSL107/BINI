@@ -7,6 +7,7 @@ import type {
   CompanyDetailResponse,
   JobsSort,
   CalendarResponse,
+  NewSinceResponse,
 } from '@bini/types';
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api';
@@ -136,5 +137,20 @@ export async function fetchCalendar(weeks: number = 4): Promise<CalendarResponse
     next: { revalidate: 60 },
   });
   if (!res.ok) throw new Error(`캘린더 요청 실패: HTTP ${res.status}`);
+  return res.json();
+}
+
+/**
+ * since 시각 이후 BINI가 처음 본 잡 수. 홈 헤더의 "지난 방문 이후 신규 N건"
+ * 뱃지가 사용한다. since는 ISO 8601 문자열.
+ *
+ * 클라이언트(브라우저)에서만 호출 — localStorage의 user baseline에 의존하므로
+ * cache:'no-store'로 매번 요청. 응답이 작아(숫자 1건) 비용 미미.
+ */
+export async function fetchNewSinceCount(since: string): Promise<NewSinceResponse> {
+  const res = await fetch(`${BASE}/jobs/new-since?since=${encodeURIComponent(since)}`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`new-since 요청 실패: HTTP ${res.status}`);
   return res.json();
 }
