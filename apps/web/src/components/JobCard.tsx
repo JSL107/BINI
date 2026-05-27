@@ -31,6 +31,10 @@ const SOURCE_COLOR: Record<JobSource, string> = {
   incruit: 'bg-pink-100 text-pink-700',
 };
 
+/**
+ * 크롤러가 잡플래닛 deep link를 못 잡은(드물지만 발생) 경우의 폴백.
+ * 별점 자체는 있지만 url=null인 경우에만 사용한다.
+ */
 function jobplanetSearchUrl(company: string): string {
   return `https://www.jobplanet.co.kr/search?query_type=company&query=${encodeURIComponent(company)}`;
 }
@@ -46,6 +50,9 @@ function ratingTone(rating: number): string {
   if (rating >= 3.0) return 'bg-amber-50 text-amber-700';
   return 'bg-gray-100 text-gray-600';
 }
+
+/** 한 카드에 표시할 태그 상한. 초과분은 +N 인디케이터로 압축. */
+const TAG_DISPLAY_CAP = 5;
 
 export function JobCard({ job }: { job: Job }) {
   // 서버 cron이 채워둔 job.deadlineAt을 우선 사용. NULL이면 원본 텍스트로 폴백.
@@ -131,9 +138,9 @@ export function JobCard({ job }: { job: Job }) {
           >
             {job.company}
           </Link>
-          {/* 잡플래닛 평판 — 별점이 있으면 바로 뱃지로 노출(딥 링크), 없으면 검색 링크로 폴백.
-              상시 노출되는 작은 친화도 신호. 같은 카드 위 다른 클릭(공고 상세 등)과 격리. */}
-          {job.jobplanet?.rating != null ? (
+          {/* 잡플래닛 평판 — 별점 데이터가 실제로 있을 때만 노출. 크롤러가 못 잡은
+              회사엔 "잡플래닛 ↗" 검색 폴백 링크를 띄우지 않는다(카드 잡음 감소). */}
+          {job.jobplanet?.rating != null && (
             <a
               href={job.jobplanet.url ?? jobplanetSearchUrl(job.company)}
               target="_blank"
@@ -153,17 +160,6 @@ export function JobCard({ job }: { job: Job }) {
                 </span>
               )}
             </a>
-          ) : (
-            <a
-              href={jobplanetSearchUrl(job.company)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              title={`${job.company} 잡플래닛 평판 보기`}
-              className="rounded text-xs text-gray-500 hover:text-blue-600 hover:underline focus:outline-none focus-visible:text-blue-700 focus-visible:underline focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1"
-            >
-              잡플래닛 ↗
-            </a>
           )}
           <PortfolioMatchBadge job={job} />
         </div>
@@ -177,7 +173,7 @@ export function JobCard({ job }: { job: Job }) {
           {job.title}
         </a>
         <div className="flex flex-wrap gap-1">
-          {job.tags.map((tag, i) => (
+          {job.tags.slice(0, TAG_DISPLAY_CAP).map((tag, i) => (
             <span
               key={`${i}-${tag}`}
               className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
@@ -185,8 +181,30 @@ export function JobCard({ job }: { job: Job }) {
               {tag}
             </span>
           ))}
+          {job.tags.length > TAG_DISPLAY_CAP && (
+            <span
+              className="rounded bg-gray-50 px-2 py-0.5 text-xs text-gray-500"
+              title={job.tags.slice(TAG_DISPLAY_CAP).join(' · ')}
+            >
+              +{job.tags.length - TAG_DISPLAY_CAP}
+            </span>
+          )}
         </div>
-        <p className="text-xs text-gray-400">마감 {job.deadline}</p>
+        {/* 마감 텍스트 — 상단 D-day 뱃지가 urgent/soon/expired는 이미 강조하므로
+            여기엔 그 외 케이스만 명시한다. 중복 노이즈 제거. */}
+        {deadline.kind === 'always' ? (
+          <p className="text-xs text-gray-400">상시 채용</p>
+        ) : deadline.kind === 'parsed' && deadline.date ? (
+          <p className="text-xs text-gray-400">
+            마감{' '}
+            {deadline.date.toLocaleDateString('ko-KR', {
+              month: 'long',
+              day: 'numeric',
+            })}
+          </p>
+        ) : deadline.kind === 'unknown' ? (
+          <p className="text-xs text-gray-400">마감 {job.deadline}</p>
+        ) : null}
       </div>
     </article>
   );

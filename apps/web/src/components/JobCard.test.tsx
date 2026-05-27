@@ -129,14 +129,13 @@ describe('JobCard', () => {
   });
 
   describe('jobplanet 평판', () => {
-    it('jobplanet이 null이면 검색 링크(잡플래닛 ↗) 폴백', () => {
+    it('jobplanet이 null이면 별점 뱃지/검색 폴백 모두 미노출(카드 잡음 감소)', () => {
       render(<JobCard job={baseJob} />);
-      const link = screen.getByText(/잡플래닛 ↗/);
-      expect(link).toBeInTheDocument();
-      expect(link.closest('a')?.getAttribute('href')).toMatch(/jobplanet\.co\.kr\/search/);
+      expect(screen.queryByText(/잡플래닛 ↗/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/★/)).not.toBeInTheDocument();
     });
 
-    it('rating이 있으면 별점 뱃지로 노출(검색 링크 대신)', () => {
+    it('rating이 있으면 별점 뱃지로 노출', () => {
       const job: Job = {
         ...baseJob,
         jobplanet: {
