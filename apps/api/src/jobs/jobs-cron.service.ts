@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type {
+  CalendarDay,
+  CalendarResponse,
   EmploymentType,
   ExperienceLevel,
   Job,
@@ -328,6 +330,78 @@ export class JobsCronService {
   }
 
   /**
+   * 캘린더용 일자별 신규/마감 카운트.
+   *
+   * 범위: 오늘(KST 자정) ~ 오늘 + weeks*7일 - 1.
+   *
+   * - newCount   : 그 날 KST 일자에 firstSeenAt이 찍힌 잡 수.
+   *                (registeredAt이 아닌 firstSeenAt — 보드에 새로 들어온 시점)
+   * - deadlineCount : 그 날 KST 일자에 deadlineAt이 떨어지는 잡 수. expiredAt IS NULL만.
+   *                   "상시"/파싱불가는 deadlineAt이 null이라 자동 제외.
+   *
+   * KST 일자 변환은 PostgreSQL `AT TIME ZONE 'Asia/Seoul'`로. 응답엔 0건 일자도
+   * 모두 포함해 UI가 빈 셀을 직접 채울 필요가 없게 한다.
+   */
+  async getCalendar(weeks: number): Promise<CalendarResponse> {
+    const today = startOfDayKst(new Date());
+    const startMs = today.getTime();
+    const days = weeks * 7;
+    const endMs = startMs + (days - 1) * 24 * 60 * 60 * 1000;
+    // SQL 범위 — 마지막 날 23:59:59.999 KST = 다음날 00:00 KST exclusive.
+    const rangeStart = new Date(startMs);
+    const rangeEndExclusive = new Date(startMs + days * 24 * 60 * 60 * 1000);
+
+    type Row = { day: Date; count: bigint | number };
+
+    const [newRows, deadlineRows] = await Promise.all([
+      this.prisma.$queryRaw<Row[]>`
+        SELECT
+          ("firstSeenAt" AT TIME ZONE 'Asia/Seoul')::date AS day,
+          COUNT(*) AS count
+        FROM jobs
+        WHERE "firstSeenAt" >= ${rangeStart}
+          AND "firstSeenAt" <  ${rangeEndExclusive}
+        GROUP BY day
+        ORDER BY day ASC
+      `,
+      this.prisma.$queryRaw<Row[]>`
+        SELECT
+          ("deadlineAt" AT TIME ZONE 'Asia/Seoul')::date AS day,
+          COUNT(*) AS count
+        FROM jobs
+        WHERE "deadlineAt" IS NOT NULL
+          AND "expiredAt" IS NULL
+          AND "deadlineAt" >= ${rangeStart}
+          AND "deadlineAt" <  ${rangeEndExclusive}
+        GROUP BY day
+        ORDER BY day ASC
+      `,
+    ]);
+
+    const newMap = new Map<string, number>();
+    for (const r of newRows) newMap.set(isoDate(r.day), Number(r.count));
+    const dlMap = new Map<string, number>();
+    for (const r of deadlineRows) dlMap.set(isoDate(r.day), Number(r.count));
+
+    const out: CalendarDay[] = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(startMs + i * 24 * 60 * 60 * 1000);
+      const key = isoDate(d);
+      out.push({
+        date: key,
+        newCount: newMap.get(key) ?? 0,
+        deadlineCount: dlMap.get(key) ?? 0,
+      });
+    }
+
+    return {
+      startDate: out[0]?.date ?? isoDate(today),
+      endDate: out[out.length - 1]?.date ?? isoDate(new Date(endMs)),
+      days: out,
+    };
+  }
+
+  /**
    * lastSeenAt이 thresholdMs를 넘긴(또한 expiredAt이 아직 null인) 잡에 expiredAt을 채운다.
    * 응답상 expired는 computeExpired가 lastSeenAt 기반으로도 동적으로 true를 내지만,
    * 컬럼에 명시적으로 기록해두면 인덱스 활용·향후 정책 변경에 유리하다.
@@ -477,6 +551,36 @@ export function buildJobsWhere(opts: JobsQuery): Record<string, unknown> {
     where.isRemote = true;
   }
   return where;
+}
+
+/**
+ * KST 기준 그 날의 자정(00:00:00)에 해당하는 UTC 인스턴트를 반환.
+ * 캘린더 그리드의 일자 경계를 일관되게 잡기 위한 헬퍼.
+ * 서버 TZ에 관계없이 동작하도록 ISO 문자열을 직접 합성.
+ */
+function startOfDayKst(now: Date): Date {
+  // toLocaleDateString을 ko-KR + Asia/Seoul로 호출하면 'YYYY. MM. DD.' 형태.
+  // 안전하게 ISO 파싱 가능한 형태로 만들어 UTC 인스턴트로 환원한다.
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  // en-CA는 'YYYY-MM-DD' 출력 — KST 자정은 UTC로 전날 15:00:00.000.
+  const ymd = fmt.format(now);
+  // ymd + 'T00:00:00+09:00' 으로 KST 자정 인스턴트를 명시.
+  return new Date(`${ymd}T00:00:00+09:00`);
+}
+
+/** Date를 KST 일자 ISO('YYYY-MM-DD') 문자열로. AT TIME ZONE 결과(date 타입)와 형식 일치. */
+function isoDate(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
 }
 
 /**

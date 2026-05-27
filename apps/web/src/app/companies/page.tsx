@@ -21,7 +21,7 @@ export default async function CompaniesPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
-      <nav className="mb-6 flex items-center gap-4 text-sm">
+      <nav className="mb-6 flex flex-wrap items-center gap-4 text-sm">
         <a href="/" className="text-gray-600 hover:text-gray-900 hover:underline">
           공고 목록
         </a>
@@ -33,6 +33,9 @@ export default async function CompaniesPage() {
         </a>
         <a href="/portfolio" className="text-gray-600 hover:text-gray-900 hover:underline">
           포트폴리오
+        </a>
+        <a href="/calendar" className="text-gray-600 hover:text-gray-900 hover:underline">
+          캘린더
         </a>
       </nav>
       <header className="mb-8">

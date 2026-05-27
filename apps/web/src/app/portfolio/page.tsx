@@ -25,6 +25,9 @@ export default function PortfolioPage() {
           통계
         </Link>
         <span className="font-semibold text-gray-900">포트폴리오</span>
+        <Link href="/calendar" className="text-gray-600 hover:text-gray-900 hover:underline">
+          캘린더
+        </Link>
       </nav>
 
       <header className="mb-6">
