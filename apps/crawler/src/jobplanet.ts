@@ -97,6 +97,13 @@ export async function fetchJobplanetCompany(
       return { companyUrl, rating: null, reviewCount: null, salaryAvg: null, status: 'blocked' };
     }
 
+    // 잡플래닛 SPA는 `/companies/<id>`에서 `/companies/<id>/reviews/<slug>`로 자동 이동.
+    // canonical URL을 잡기 위해 SPA route가 settle될 때까지 잠깐 더 기다린다.
+    // /reviews/ 도달이 안 되더라도 메인 페이지에서 별점은 보통 추출 가능 — best-effort.
+    await page
+      .waitForURL(/\/companies\/\d+\/reviews\//, { timeout: 5_000 })
+      .catch(() => undefined);
+
     // SPA route — 평점 노드가 lazy-load일 수 있어 잠깐 대기.
     await page
       .waitForSelector(
@@ -104,6 +111,21 @@ export async function fetchJobplanetCompany(
         { timeout: 5_000 },
       )
       .catch(() => undefined);
+
+    // redirect 후 canonical URL 추출. SPA가 `/reviews/<slug>`로 이동했으면 사용자가
+    // 클릭할 때 한 번 덜 점프하고 잡플래닛 자체에서도 평점 박스 노출이 안정적이다.
+    // domain은 다시 확인 — redirect가 외부로 새는 변형 방어.
+    const canonicalUrl = (() => {
+      const after = page.url();
+      try {
+        const host = new URL(after).hostname;
+        if (!/(^|\.)jobplanet\.co\.kr$/i.test(host)) return companyUrl;
+        return after;
+      } catch {
+        return companyUrl;
+      }
+    })();
+    companyUrl = canonicalUrl;
 
     // 3) 본문에서 평점/리뷰/연봉 추출. 마크업 변동에 강건하도록 셀렉터 + 텍스트
     //    정규식 양쪽 모두 시도한다. 셀렉터 매칭도 합리범위(0.5~5.0) 통과 시에만 채택해
