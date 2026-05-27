@@ -348,7 +348,10 @@ export class JobsCronService {
 
     type Row = { day: Date; count: bigint | number };
 
-    const [newRows, deadlineRows] = await Promise.all([
+    // 카운트(group) + 마감 미리보기(셀당 캡)를 한 라운드트립으로. 미리보기는 dedup primary만
+    // (alias 잡은 같은 회사·제목이라 중복 노출 비효율). preview 캡은 셀당 5건 — 초과분은
+    // UI가 "외 N건"으로 표시. 범위가 4주(28일) × 평균 한자리 잡 정도라 페이로드 영향 미미.
+    const [newRows, deadlineRows, dlPreviewRows] = await Promise.all([
       this.prisma.$queryRaw<Row[]>`
         SELECT
           ("firstSeenAt" AT TIME ZONE 'Asia/Seoul')::date AS day,
@@ -371,12 +374,44 @@ export class JobsCronService {
         GROUP BY day
         ORDER BY day ASC
       `,
+      this.prisma.job.findMany({
+        where: {
+          primaryJobId: null,
+          expiredAt: null,
+          deadlineAt: { gte: rangeStart, lt: rangeEndExclusive },
+        },
+        orderBy: [{ deadlineAt: 'asc' }, { id: 'desc' }],
+        select: {
+          id: true,
+          title: true,
+          company: true,
+          detailUrl: true,
+          deadlineAt: true,
+        },
+      }),
     ]);
 
     const newMap = new Map<string, number>();
     for (const r of newRows) newMap.set(isoDateKst(r.day), Number(r.count));
     const dlMap = new Map<string, number>();
     for (const r of deadlineRows) dlMap.set(isoDateKst(r.day), Number(r.count));
+
+    // 셀당 캡(5)까지만 모음. orderBy deadlineAt asc + id desc로 안정 정렬된 첫 N건.
+    const PREVIEW_CAP_PER_DAY = 5;
+    const previewByDay = new Map<string, CalendarDay['deadlineJobs']>();
+    for (const row of dlPreviewRows) {
+      if (!row.deadlineAt) continue;
+      const key = isoDateKst(row.deadlineAt);
+      const arr = previewByDay.get(key) ?? [];
+      if (arr.length >= PREVIEW_CAP_PER_DAY) continue;
+      arr.push({
+        id: row.id,
+        title: row.title,
+        company: row.company,
+        detailUrl: row.detailUrl,
+      });
+      previewByDay.set(key, arr);
+    }
 
     const out: CalendarDay[] = [];
     for (let i = 0; i < days; i++) {
@@ -386,6 +421,7 @@ export class JobsCronService {
         date: key,
         newCount: newMap.get(key) ?? 0,
         deadlineCount: dlMap.get(key) ?? 0,
+        deadlineJobs: previewByDay.get(key) ?? [],
       });
     }
 
