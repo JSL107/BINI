@@ -19,6 +19,7 @@ function mkJob(over: Partial<Job> & { id: string; source: JobSource }): Job {
     detailUrl: '',
     deadline: '상시',
     deadlineAt: null,
+    jobplanet: null,
     registeredAt: '2026-05-23T00:00:00.000Z',
     tags: [],
     gameTitle: null,
