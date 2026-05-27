@@ -198,6 +198,35 @@ export interface CompanyCount {
 }
 
 /**
+ * 캘린더 한 칸. 일자별 신규 등록·마감 카운트.
+ *
+ * - newCount: 그 날 BINI가 처음 본 잡 수(firstSeenAt 기준, KST 일자로 group).
+ *   원본 사이트 registeredAt이 아닌 firstSeenAt을 쓰는 이유는 사용자가 "내가 보고
+ *   있는 보드에 새 공고가 언제 들어왔는가"를 알고 싶기 때문.
+ * - deadlineCount: 그 날 마감인 잡 수(deadlineAt 기준, KST 일자 group, expired 제외).
+ *   "상시"/파싱불가는 deadlineAt이 null이라 자동으로 빠짐.
+ */
+export interface CalendarDay {
+  /** ISO date YYYY-MM-DD (KST 기준 자정 시각의 날짜) */
+  date: string;
+  newCount: number;
+  deadlineCount: number;
+}
+
+/**
+ * GET /api/jobs/calendar 응답. startDate ~ endDate 범위의 일자별 카운트.
+ * 범위 내 모든 날짜(0건 포함)가 days 배열에 들어 있다 — UI가 빈 셀을 직접 채울
+ * 필요가 없도록.
+ */
+export interface CalendarResponse {
+  /** ISO date (KST 기준). days[0].date와 같음. */
+  startDate: string;
+  /** ISO date (KST 기준). days[last].date와 같음. */
+  endDate: string;
+  days: CalendarDay[];
+}
+
+/**
  * cron 실행 이력 한 행 요약. 운영 대시보드/상태 페이지에서 최근 N건을 표시한다.
  *
  * status:

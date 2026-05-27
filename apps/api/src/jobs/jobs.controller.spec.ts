@@ -6,8 +6,11 @@ describe('JobsController', () => {
     const getJobsFromDb = getJobsFromDbImpl
       ? jest.fn(getJobsFromDbImpl)
       : jest.fn().mockResolvedValue({ page: 1, totalPages: 5, jobs: [] });
-    const service = { getJobsFromDb } as unknown as JobsCronService;
-    return { controller: new JobsController(service), getJobsFromDb };
+    const getCalendar = jest
+      .fn()
+      .mockResolvedValue({ startDate: '2026-05-27', endDate: '2026-06-23', days: [] });
+    const service = { getJobsFromDb, getCalendar } as unknown as JobsCronService;
+    return { controller: new JobsController(service), getJobsFromDb, getCalendar };
   }
 
   // 신규 시그니처: (page, undefined, opts) — opts는 search/experience/employmentType/location/remote/sort.
@@ -181,6 +184,47 @@ describe('JobsController', () => {
     expect(getJobsFromDb).toHaveBeenCalledWith(1, undefined, {
       ...emptyOpts,
       sort: 'deadline-soonest',
+    });
+  });
+
+  describe('GET /jobs/calendar', () => {
+    it('weeks 미지정 시 기본 4주', async () => {
+      const { controller, getCalendar } = build();
+      await controller.getCalendar(undefined);
+      expect(getCalendar).toHaveBeenCalledWith(4);
+    });
+
+    it('weeks 양의 정수는 통과', async () => {
+      const { controller, getCalendar } = build();
+      await controller.getCalendar('6');
+      expect(getCalendar).toHaveBeenCalledWith(6);
+    });
+
+    it('weeks 비정규(abc, 1.5)는 기본 4주로 폴백', async () => {
+      const { controller, getCalendar } = build();
+      await controller.getCalendar('abc');
+      await controller.getCalendar('1.5');
+      expect(getCalendar).toHaveBeenNthCalledWith(1, 4);
+      expect(getCalendar).toHaveBeenNthCalledWith(2, 4);
+    });
+
+    it('weeks 상한(12) 초과는 12로 클램프', async () => {
+      const { controller, getCalendar } = build();
+      await controller.getCalendar('999');
+      expect(getCalendar).toHaveBeenCalledWith(12);
+    });
+
+    it('weeks 0 또는 음수는 최소 1로 클램프', async () => {
+      const { controller, getCalendar } = build();
+      // 음수는 /^\d+$/에 안 걸려 NaN → 기본 4. 0은 정수라 통과 후 1로 clamp.
+      await controller.getCalendar('0');
+      expect(getCalendar).toHaveBeenCalledWith(1);
+    });
+
+    it('weeks 배열은 첫 값만 사용', async () => {
+      const { controller, getCalendar } = build();
+      await controller.getCalendar(['2', '8']);
+      expect(getCalendar).toHaveBeenCalledWith(2);
     });
   });
 });

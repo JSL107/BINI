@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import type { JobsResponse, JobsSort } from '@bini/types';
+import type { CalendarResponse, JobsResponse, JobsSort } from '@bini/types';
 import { JobsCronService, type JobsQuery } from './jobs-cron.service';
 import {
   parseEmploymentTypeQuery,
@@ -9,6 +9,10 @@ import {
 
 /** page 쿼리 상한 — 비정상적으로 큰 값으로 의미 없는 페이지네이션 오프셋을 막기 위한 클램프. */
 const MAX_PAGE = 500;
+/** GET /jobs/calendar?weeks 허용 범위. 1주 미만 의미 없고 12주 넘으면 그리드가 너무 커진다. */
+const CALENDAR_MIN_WEEKS = 1;
+const CALENDAR_MAX_WEEKS = 12;
+const CALENDAR_DEFAULT_WEEKS = 4;
 
 @Controller('jobs')
 export class JobsController {
@@ -57,6 +61,24 @@ export class JobsController {
       sort: parseSort(sortValue),
     };
     return this.jobsCron.getJobsFromDb(pageNum, undefined, opts);
+  }
+
+  /**
+   * GET /api/jobs/calendar?weeks=4
+   * 오늘(KST) 기준으로 시작하는 N주(기본 4) 캘린더 그리드를 위한 일자별 카운트.
+   * - newCount: 그 날 firstSeenAt이 찍힌 잡 수
+   * - deadlineCount: 그 날 마감인 잡 수(deadlineAt, expiredAt IS NULL)
+   *
+   * weeks는 1~12 사이의 정수만 허용. 누락/비정규는 기본 4로.
+   */
+  @Get('calendar')
+  async getCalendar(@Query('weeks') weeks?: string | string[]): Promise<CalendarResponse> {
+    const raw = Array.isArray(weeks) ? weeks[0] : weeks;
+    const parsed = /^\d+$/.test((raw ?? '').trim()) ? parseInt(raw as string, 10) : NaN;
+    const clamped = Number.isNaN(parsed)
+      ? CALENDAR_DEFAULT_WEEKS
+      : Math.max(CALENDAR_MIN_WEEKS, Math.min(parsed, CALENDAR_MAX_WEEKS));
+    return this.jobsCron.getCalendar(clamped);
   }
 }
 

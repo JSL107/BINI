@@ -6,6 +6,7 @@ import type {
   CareerSitesResponse,
   CompanyDetailResponse,
   JobsSort,
+  CalendarResponse,
 } from '@bini/types';
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api';
@@ -124,4 +125,16 @@ export async function reportBadImage(
       console.warn('bad-image report error', err);
     }
   }
+}
+
+/**
+ * 캘린더 페이지가 사용. 오늘(KST) 부터 weeks주(기본 4)의 일자별 신규/마감 카운트.
+ * cron 갱신 주기 3h라 60s revalidate면 충분.
+ */
+export async function fetchCalendar(weeks: number = 4): Promise<CalendarResponse> {
+  const res = await fetch(`${BASE}/jobs/calendar?weeks=${weeks}`, {
+    next: { revalidate: 60 },
+  });
+  if (!res.ok) throw new Error(`캘린더 요청 실패: HTTP ${res.status}`);
+  return res.json();
 }

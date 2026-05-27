@@ -86,7 +86,7 @@ export default async function Home({
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
-      <nav className="mb-6 flex items-center gap-4 text-sm">
+      <nav className="mb-6 flex flex-wrap items-center gap-4 text-sm">
         <a href="/" className="font-semibold text-gray-900">
           공고 목록
         </a>
@@ -98,6 +98,9 @@ export default async function Home({
         </a>
         <a href="/portfolio" className="text-gray-600 hover:text-gray-900 hover:underline">
           포트폴리오
+        </a>
+        <a href="/calendar" className="text-gray-600 hover:text-gray-900 hover:underline">
+          캘린더
         </a>
       </nav>
       <h1 className="mb-4 text-2xl font-bold">게임 원화 채용공고</h1>
