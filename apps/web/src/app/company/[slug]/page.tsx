@@ -89,7 +89,7 @@ export default async function CompanyPage({
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-gray-900">{data.name}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-gray-600">
-            <span>BINI 잡 {data.jobs.length}건 · 활성 {activeJobs.length} / 마감 {expiredJobs.length}</span>
+            <span>BINI 잡 {data.jobs.length}건 · 활성 {activeJobs.length} / 종료 {expiredJobs.length}</span>
             {data.sources.length > 0 && (
               <span className="text-gray-400">
                 · 소스: {data.sources.map((s) => SOURCE_LABEL[s] ?? s).join(', ')}
