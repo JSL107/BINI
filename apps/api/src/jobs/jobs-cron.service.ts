@@ -3,6 +3,7 @@ import type {
   EmploymentType,
   ExperienceLevel,
   Job,
+  JobplanetSummary,
   JobSource,
   JobsResponse,
   JobsSort,
@@ -291,11 +292,37 @@ export class JobsCronService {
       }),
     ]);
     const totalPages = Math.max(1, Math.ceil(total / perPage));
+
+    // 잡플래닛 평판: 이 페이지의 unique 회사들에 대해 한 번에 join.
+    // status='found'만 노출(rating 채워진 경우만). 회사명 매칭은 raw 문자열(=) — 크롤러도
+    // Job.company 원문을 키로 쓴다. 인덱스(PK)라 in() 쿼리는 가볍다.
+    const uniqueCompanies = Array.from(new Set(rows.map((r) => r.company)));
+    const jpRows =
+      uniqueCompanies.length > 0
+        ? await this.prisma.jobplanetCompany.findMany({
+            where: { companyName: { in: uniqueCompanies }, status: 'found' },
+          })
+        : [];
+    const jpByCompany = new Map<string, JobplanetSummary>();
+    for (const jp of jpRows) {
+      jpByCompany.set(jp.companyName, {
+        url: safeJobplanetUrl(jp.companyUrl),
+        rating: jp.rating,
+        reviewCount: jp.reviewCount,
+        salaryAvg: jp.salaryAvg,
+        fetchedAt: jp.fetchedAt.toISOString(),
+      });
+    }
+
     const jobs = rows.map((row) =>
-      toJobDto(row, (row.aliases ?? []).map((a) => ({
-        source: isJobSource(a.source) ? a.source : ('gamejob' as JobSource),
-        detailUrl: a.detailUrl,
-      }))),
+      toJobDto(
+        row,
+        (row.aliases ?? []).map((a) => ({
+          source: isJobSource(a.source) ? a.source : ('gamejob' as JobSource),
+          detailUrl: a.detailUrl,
+        })),
+        jpByCompany.get(row.company) ?? null,
+      ),
     );
     return { page, totalPages, jobs };
   }
@@ -452,6 +479,22 @@ export function buildJobsWhere(opts: JobsQuery): Record<string, unknown> {
   return where;
 }
 
+/**
+ * 크롤러가 채워둔 jobplanet URL이 응답에 새어 나가도 안전한지 검증.
+ * https + jobplanet.co.kr 도메인만 통과. companies.service.ts의 동일 정책과 일치.
+ */
+function safeJobplanetUrl(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'https:') return null;
+    if (!/(^|\.)jobplanet\.co\.kr$/i.test(u.hostname)) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 function isJobSource(s: string): s is JobSource {
   return (
     s === 'gamejob' ||
@@ -517,6 +560,7 @@ export function toJobDto(
     isRemote?: boolean;
   },
   alternateSources: Job['alternateSources'] = [],
+  jobplanet: JobplanetSummary | null = null,
 ): Job {
   const imageQueryType: Job['imageQueryType'] =
     row.imageQueryType === 'game' ? 'game' : 'company';
@@ -544,5 +588,6 @@ export function toJobDto(
     employmentType: asEmployment(row.employmentType ?? null),
     locations: row.locations ?? [],
     isRemote: row.isRemote ?? false,
+    jobplanet,
   };
 }

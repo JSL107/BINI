@@ -25,6 +25,18 @@ function jobplanetSearchUrl(company: string): string {
   return `https://www.jobplanet.co.kr/search?query_type=company&query=${encodeURIComponent(company)}`;
 }
 
+/**
+ * 잡플래닛 별점에 대응하는 카드 색조. 5점 만점 기준의 보수적 분기.
+ * - 4.0+ : 녹색(우수)
+ * - 3.0~4.0 : 호박색(보통)
+ * - 3.0 미만 : 회색(낮음 — 강조 안 함)
+ */
+function ratingTone(rating: number): string {
+  if (rating >= 4.0) return 'bg-emerald-50 text-emerald-700';
+  if (rating >= 3.0) return 'bg-amber-50 text-amber-700';
+  return 'bg-gray-100 text-gray-600';
+}
+
 export function JobCard({ job }: { job: Job }) {
   // 서버 cron이 채워둔 job.deadlineAt을 우선 사용. NULL이면 원본 텍스트로 폴백.
   const deadline = deadlineStatusFromJob(job);
@@ -77,17 +89,40 @@ export function JobCard({ job }: { job: Job }) {
           >
             {job.company}
           </Link>
-          {/* 잡플래닛 회사 검색 — 회사 평판·연봉·면접 정보 빠른 진입 */}
-          <a
-            href={jobplanetSearchUrl(job.company)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            title={`${job.company} 잡플래닛 평판 보기`}
-            className="rounded text-xs text-gray-500 hover:text-blue-600 hover:underline focus:outline-none focus-visible:text-blue-700 focus-visible:underline focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1"
-          >
-            잡플래닛 ↗
-          </a>
+          {/* 잡플래닛 평판 — 별점이 있으면 바로 뱃지로 노출(딥 링크), 없으면 검색 링크로 폴백.
+              상시 노출되는 작은 친화도 신호. 같은 카드 위 다른 클릭(공고 상세 등)과 격리. */}
+          {job.jobplanet?.rating != null ? (
+            <a
+              href={job.jobplanet.url ?? jobplanetSearchUrl(job.company)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title={
+                job.jobplanet.reviewCount != null
+                  ? `잡플래닛 ★${job.jobplanet.rating.toFixed(1)} · 리뷰 ${job.jobplanet.reviewCount.toLocaleString()}건`
+                  : `잡플래닛 ★${job.jobplanet.rating.toFixed(1)}`
+              }
+              className={`rounded px-1.5 py-0.5 text-xs font-medium ${ratingTone(job.jobplanet.rating)} hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400`}
+            >
+              ★ {job.jobplanet.rating.toFixed(1)}
+              {job.jobplanet.reviewCount != null && job.jobplanet.reviewCount > 0 && (
+                <span className="ml-1 opacity-70">
+                  ({job.jobplanet.reviewCount.toLocaleString()})
+                </span>
+              )}
+            </a>
+          ) : (
+            <a
+              href={jobplanetSearchUrl(job.company)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title={`${job.company} 잡플래닛 평판 보기`}
+              className="rounded text-xs text-gray-500 hover:text-blue-600 hover:underline focus:outline-none focus-visible:text-blue-700 focus-visible:underline focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1"
+            >
+              잡플래닛 ↗
+            </a>
+          )}
           <PortfolioMatchBadge job={job} />
         </div>
         <a

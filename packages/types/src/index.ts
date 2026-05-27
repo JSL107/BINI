@@ -53,6 +53,11 @@ export interface Job {
   locations: string[];
   /** tags+title에 재택/원격 키워드가 있으면 true. */
   isRemote: boolean;
+  /**
+   * 잡플래닛 평판 요약. 회사명 매칭 실패/크롤러 미수집/status='not_found'면 null.
+   * 카드에서 별점 뱃지 표시용. 자세한 리뷰는 url로 이동.
+   */
+  jobplanet: JobplanetSummary | null;
 }
 
 export interface JobsResponse {

@@ -24,6 +24,7 @@ const baseJob: Job = {
   detailUrl: 'https://www.gamejob.co.kr/Recruit/GI_Read/View?GI_No=278454',
   deadline: '상시',
   deadlineAt: null,
+  jobplanet: null,
   registeredAt: '2026-05-22T08:00:00.000Z',
   tags: ['신입', '경기'],
   gameTitle: 'p.일렌시아',
@@ -123,6 +124,67 @@ describe('JobCard', () => {
       };
       render(<JobCard job={job} />);
       expect(screen.queryByText(/\+\d+/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('jobplanet 평판', () => {
+    it('jobplanet이 null이면 검색 링크(잡플래닛 ↗) 폴백', () => {
+      render(<JobCard job={baseJob} />);
+      const link = screen.getByText(/잡플래닛 ↗/);
+      expect(link).toBeInTheDocument();
+      expect(link.closest('a')?.getAttribute('href')).toMatch(/jobplanet\.co\.kr\/search/);
+    });
+
+    it('rating이 있으면 별점 뱃지로 노출(검색 링크 대신)', () => {
+      const job: Job = {
+        ...baseJob,
+        jobplanet: {
+          url: 'https://www.jobplanet.co.kr/companies/12345',
+          rating: 4.3,
+          reviewCount: 128,
+          salaryAvg: 5200,
+          fetchedAt: '2026-05-26T00:00:00.000Z',
+        },
+      };
+      render(<JobCard job={job} />);
+      expect(screen.getByText(/★\s*4\.3/)).toBeInTheDocument();
+      expect(screen.getByText(/\(128\)/)).toBeInTheDocument();
+      // 검색 폴백 링크는 같이 뜨지 않는다(중복 방지)
+      expect(screen.queryByText(/잡플래닛 ↗/)).not.toBeInTheDocument();
+    });
+
+    it('rating은 있고 url은 null이면 검색 URL을 폴백 href로 사용', () => {
+      const job: Job = {
+        ...baseJob,
+        jobplanet: {
+          url: null,
+          rating: 3.9,
+          reviewCount: null,
+          salaryAvg: null,
+          fetchedAt: '2026-05-26T00:00:00.000Z',
+        },
+      };
+      render(<JobCard job={job} />);
+      const badge = screen.getByText(/★\s*3\.9/);
+      expect(badge.closest('a')?.getAttribute('href')).toMatch(
+        /jobplanet\.co\.kr\/search/,
+      );
+    });
+
+    it('reviewCount가 null이면 (n) 표시는 생략', () => {
+      const job: Job = {
+        ...baseJob,
+        jobplanet: {
+          url: 'https://www.jobplanet.co.kr/companies/999',
+          rating: 4.5,
+          reviewCount: null,
+          salaryAvg: null,
+          fetchedAt: '2026-05-26T00:00:00.000Z',
+        },
+      };
+      render(<JobCard job={job} />);
+      expect(screen.getByText(/★\s*4\.5/)).toBeInTheDocument();
+      expect(screen.queryByText(/\(0\)|\(null\)/)).not.toBeInTheDocument();
     });
   });
 });
