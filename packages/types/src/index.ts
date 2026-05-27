@@ -198,19 +198,38 @@ export interface CompanyCount {
 }
 
 /**
- * 캘린더 한 칸. 일자별 신규 등록·마감 카운트.
+ * 캘린더 셀 하나에서 hover/탭 시 노출할 잡 미리보기. 카운트만으론
+ * "그 6건이 뭔지" 알 수 없어서 제목·회사·외부 링크를 함께 내려준다.
+ *
+ * 응답 페이로드 크기 절감을 위해 셀당 최대 CALENDAR_PREVIEW_CAP건(서버 상수)로
+ * 캡한다. 초과분은 deadlineCount - deadlineJobs.length로 "외 N건" 표시.
+ */
+export interface CalendarJobPreview {
+  /** Job.id — "<source>:<sourceId>" */
+  id: string;
+  title: string;
+  company: string;
+  /** 외부 상세 페이지. 셀 popover에서 새 탭으로 열린다. */
+  detailUrl: string;
+}
+
+/**
+ * 캘린더 한 칸. 일자별 신규 등록·마감 카운트 + 마감 잡 미리보기.
  *
  * - newCount: 그 날 BINI가 처음 본 잡 수(firstSeenAt 기준, KST 일자로 group).
  *   원본 사이트 registeredAt이 아닌 firstSeenAt을 쓰는 이유는 사용자가 "내가 보고
  *   있는 보드에 새 공고가 언제 들어왔는가"를 알고 싶기 때문.
  * - deadlineCount: 그 날 마감인 잡 수(deadlineAt 기준, KST 일자 group, expired 제외).
  *   "상시"/파싱불가는 deadlineAt이 null이라 자동으로 빠짐.
+ * - deadlineJobs: 그 날 마감 중 상위 N건(서버 캡). 캐러셀 없이 inline.
+ *   deadlineCount=0이면 빈 배열.
  */
 export interface CalendarDay {
   /** ISO date YYYY-MM-DD (KST 기준 자정 시각의 날짜) */
   date: string;
   newCount: number;
   deadlineCount: number;
+  deadlineJobs: CalendarJobPreview[];
 }
 
 /**
