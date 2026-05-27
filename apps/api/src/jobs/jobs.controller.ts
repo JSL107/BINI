@@ -1,5 +1,10 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import type { CalendarResponse, JobsResponse, JobsSort } from '@bini/types';
+import type {
+  CalendarResponse,
+  JobsResponse,
+  JobsSort,
+  NewSinceResponse,
+} from '@bini/types';
 import { JobsCronService, type JobsQuery } from './jobs-cron.service';
 import {
   parseEmploymentTypeQuery,
@@ -80,7 +85,37 @@ export class JobsController {
       : Math.max(CALENDAR_MIN_WEEKS, Math.min(parsed, CALENDAR_MAX_WEEKS));
     return this.jobsCron.getCalendar(clamped);
   }
+
+  /**
+   * GET /api/jobs/new-since?since=<ISO>
+   * since 시각 이후 BINI가 처음 본(firstSeenAt >= since) primary 잡 수.
+   * 홈 헤더의 "지난 방문 이후 신규 N건" 뱃지가 사용한다.
+   *
+   * since 파싱 실패/누락 시 NEW_SINCE_FALLBACK_DAYS 전을 기본값으로 사용.
+   * 미래 시각/너무 먼 과거(>180d)도 동일한 폴백을 적용해 악의적 입력을 컷한다.
+   */
+  @Get('new-since')
+  async getNewSince(
+    @Query('since') since?: string | string[],
+  ): Promise<NewSinceResponse> {
+    const raw = (Array.isArray(since) ? since[0] : since)?.trim() ?? '';
+    const ms = raw ? Date.parse(raw) : NaN;
+    const now = Date.now();
+    const earliest = now - NEW_SINCE_MAX_LOOKBACK_MS;
+    const safeMs =
+      Number.isNaN(ms) || ms > now || ms < earliest
+        ? now - NEW_SINCE_FALLBACK_DAYS * 24 * 60 * 60 * 1000
+        : ms;
+    const sinceDate = new Date(safeMs);
+    const count = await this.jobsCron.getNewSinceCount(sinceDate);
+    return { since: sinceDate.toISOString(), count };
+  }
 }
+
+/** /jobs/new-since 폴백 — since 파라미터 없거나 비정상일 때 기본으로 보는 lookback. */
+const NEW_SINCE_FALLBACK_DAYS = 7;
+/** since로 받을 수 있는 최대 lookback. 그보다 먼 과거는 폴백 처리(180일). */
+const NEW_SINCE_MAX_LOOKBACK_MS = 180 * 24 * 60 * 60 * 1000;
 
 /** sort 쿼리 파라미터 sanitizer. 알려진 값만 통과, 나머지는 undefined(기본=recent). */
 function parseSort(raw: string | undefined): JobsSort | undefined {

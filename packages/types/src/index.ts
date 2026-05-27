@@ -246,6 +246,18 @@ export interface CalendarResponse {
 }
 
 /**
+ * GET /api/jobs/new-since?since=<ISO> 응답.
+ * since 시각 이후 BINI가 처음 본(firstSeenAt >= since) primary 잡 수.
+ * UI는 홈 헤더의 "지난 방문 이후 신규 N건" 뱃지에 사용한다.
+ */
+export interface NewSinceResponse {
+  /** 요청에서 받은 since 시각 (ISO 8601). 서버가 그대로 echo. */
+  since: string;
+  /** firstSeenAt >= since && primaryJobId IS NULL인 잡 수. */
+  count: number;
+}
+
+/**
  * cron 실행 이력 한 행 요약. 운영 대시보드/상태 페이지에서 최근 N건을 표시한다.
  *
  * status:

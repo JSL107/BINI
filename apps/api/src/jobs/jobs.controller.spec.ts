@@ -9,8 +9,18 @@ describe('JobsController', () => {
     const getCalendar = jest
       .fn()
       .mockResolvedValue({ startDate: '2026-05-27', endDate: '2026-06-23', days: [] });
-    const service = { getJobsFromDb, getCalendar } as unknown as JobsCronService;
-    return { controller: new JobsController(service), getJobsFromDb, getCalendar };
+    const getNewSinceCount = jest.fn().mockResolvedValue(0);
+    const service = {
+      getJobsFromDb,
+      getCalendar,
+      getNewSinceCount,
+    } as unknown as JobsCronService;
+    return {
+      controller: new JobsController(service),
+      getJobsFromDb,
+      getCalendar,
+      getNewSinceCount,
+    };
   }
 
   // 신규 시그니처: (page, undefined, opts) — opts는 search/experience/employmentType/location/remote/sort.
@@ -225,6 +235,75 @@ describe('JobsController', () => {
       const { controller, getCalendar } = build();
       await controller.getCalendar(['2', '8']);
       expect(getCalendar).toHaveBeenCalledWith(2);
+    });
+  });
+
+  describe('GET /jobs/new-since', () => {
+    it('정상 ISO since는 그대로 service에 전달', async () => {
+      const { controller, getNewSinceCount } = build();
+      const since = '2026-05-26T12:00:00.000Z';
+      const res = await controller.getNewSince(since);
+      expect(getNewSinceCount).toHaveBeenCalledTimes(1);
+      const arg = getNewSinceCount.mock.calls[0][0] as Date;
+      expect(arg.toISOString()).toBe(since);
+      expect(res.since).toBe(since);
+    });
+
+    it('since 누락 시 7일 전을 기본값으로', async () => {
+      const { controller, getNewSinceCount } = build();
+      const before = Date.now();
+      await controller.getNewSince(undefined);
+      const arg = getNewSinceCount.mock.calls[0][0] as Date;
+      const diffMs = before - arg.getTime();
+      // 약 7일 = 604_800_000ms. 호출 오버헤드 1초 미만 허용.
+      expect(diffMs).toBeGreaterThanOrEqual(7 * 24 * 60 * 60 * 1000 - 1000);
+      expect(diffMs).toBeLessThan(7 * 24 * 60 * 60 * 1000 + 1000);
+    });
+
+    it('parse 실패 since(=garbage)는 7일 전 폴백', async () => {
+      const { controller, getNewSinceCount } = build();
+      const before = Date.now();
+      await controller.getNewSince('not-a-date');
+      const arg = getNewSinceCount.mock.calls[0][0] as Date;
+      const diffMs = before - arg.getTime();
+      expect(diffMs).toBeGreaterThanOrEqual(7 * 24 * 60 * 60 * 1000 - 1000);
+    });
+
+    it('미래 시각은 폴백 (악의적 입력 방어)', async () => {
+      const { controller, getNewSinceCount } = build();
+      const future = new Date(Date.now() + 60_000).toISOString();
+      const before = Date.now();
+      await controller.getNewSince(future);
+      const arg = getNewSinceCount.mock.calls[0][0] as Date;
+      const diffMs = before - arg.getTime();
+      expect(diffMs).toBeGreaterThanOrEqual(7 * 24 * 60 * 60 * 1000 - 1000);
+    });
+
+    it('너무 먼 과거(180일+)는 폴백', async () => {
+      const { controller, getNewSinceCount } = build();
+      const old = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+      const before = Date.now();
+      await controller.getNewSince(old);
+      const arg = getNewSinceCount.mock.calls[0][0] as Date;
+      const diffMs = before - arg.getTime();
+      expect(diffMs).toBeGreaterThanOrEqual(7 * 24 * 60 * 60 * 1000 - 1000);
+      expect(diffMs).toBeLessThan(7 * 24 * 60 * 60 * 1000 + 1000);
+    });
+
+    it('count를 그대로 반환', async () => {
+      const { controller, getNewSinceCount } = build();
+      getNewSinceCount.mockResolvedValueOnce(42);
+      const res = await controller.getNewSince('2026-05-26T12:00:00.000Z');
+      expect(res.count).toBe(42);
+    });
+
+    it('since 배열은 첫 값만 사용', async () => {
+      const { controller, getNewSinceCount } = build();
+      const a = '2026-05-26T12:00:00.000Z';
+      const b = '2026-05-27T12:00:00.000Z';
+      await controller.getNewSince([a, b]);
+      const arg = getNewSinceCount.mock.calls[0][0] as Date;
+      expect(arg.toISOString()).toBe(a);
     });
   });
 });

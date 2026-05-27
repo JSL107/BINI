@@ -4,6 +4,7 @@ import { fetchJobs, type JobsQueryOptions } from '../lib/api';
 import { JobsGridWithFilter } from '../components/JobsGridWithFilter';
 import { Pagination } from '../components/Pagination';
 import { AttributeFilterBar } from '../components/AttributeFilterBar';
+import { NewSinceBadge } from '../components/NewSinceBadge';
 
 // force-dynamic 제거 — fetchJobs가 next.revalidate=30으로 캐시되므로 같은
 // page+search+필터 조합은 30s 동안 Vercel Edge에서 즉시 응답. page는 searchParams
@@ -104,6 +105,7 @@ export default async function Home({
         </a>
       </nav>
       <h1 className="mb-4 text-2xl font-bold">게임 원화 채용공고</h1>
+      <NewSinceBadge />
       <form action="/" method="get" className="mb-6 flex items-center gap-2">
         <input
           type="search"
