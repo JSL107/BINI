@@ -2,13 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import type {
   CalendarDay,
   CalendarResponse,
-  EmploymentType,
-  ExperienceLevel,
-  Job,
   JobplanetSummary,
   JobSource,
   JobsResponse,
-  JobsSort,
 } from '@bini/types';
 import { GamejobScraperService } from '../scraper/gamejob-scraper.service';
 import { GamejobDetailService } from '../scraper/gamejob-detail.service';
@@ -28,10 +24,22 @@ import type { RawJob } from '../scraper/raw-job';
 import { groupRawJobs } from './dedupe';
 import { computeAttributes } from './job-attributes';
 import { parseDeadlineToDate } from './deadline-parser';
-import { expandSearchTerms } from './synonyms';
+import {
+  EXPIRY_WINDOW_MS,
+  buildJobsOrderBy,
+  buildJobsWhere,
+  isoDateKst,
+  isJobSource,
+  safeJobplanetUrl,
+  startOfDayKst,
+  toJobDto,
+} from './job-dto';
+import type { JobsQuery } from './job-dto';
 
-/** lastSeenAt이 이 값을 넘은 잡은 expired로 간주 (sweepExpired 임계값 + computeExpired 동적 계산 기준). */
-const EXPIRY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+// 외부 모듈(controller/companies/script)이 기존 import 경로를 깨지 않도록 재-export.
+export type { JobsQuery } from './job-dto';
+export { buildJobsOrderBy, buildJobsWhere, computeExpired, toJobDto } from './job-dto';
+
 const DEFAULT_PER_PAGE = 50;
 /** detail 재스크래핑 stale 기준. detailScrapedAt이 이 값보다 오래된 잡 또는 null인 잡을 대상으로. */
 const DEFAULT_DETAIL_STALE_MS = 24 * 60 * 60 * 1000;
@@ -57,19 +65,6 @@ export interface ScrapeResult {
   failedSources: JobSource[];
   /** 모든 소스가 실패해서 이 페이지 결과가 비어 있는 상태 — cron이 즉시 중단해야 함 */
   totalFailure: boolean;
-}
-
-/** 사용자 응답 경로(getJobsFromDb)에 적용되는 필터 옵션. 모든 항목 optional, OR 아닌 AND 결합. */
-export interface JobsQuery {
-  search?: string;
-  experience?: ExperienceLevel[];
-  employmentType?: EmploymentType[];
-  /** 시도 라벨 문자열 배열. 빈 배열이면 필터 없음. */
-  location?: string[];
-  /** true일 때만 isRemote=true인 잡만. false/undefined면 무필터. */
-  remote?: boolean;
-  /** 정렬. 미지정/'recent'는 등록일 desc(기본), 'deadline-soonest'는 마감 임박순. */
-  sort?: JobsSort;
 }
 
 /** detail fetcher 시그니처 — `JobDetailExtract`를 반환하는 source별 어댑터. */
@@ -379,14 +374,14 @@ export class JobsCronService {
     ]);
 
     const newMap = new Map<string, number>();
-    for (const r of newRows) newMap.set(isoDate(r.day), Number(r.count));
+    for (const r of newRows) newMap.set(isoDateKst(r.day), Number(r.count));
     const dlMap = new Map<string, number>();
-    for (const r of deadlineRows) dlMap.set(isoDate(r.day), Number(r.count));
+    for (const r of deadlineRows) dlMap.set(isoDateKst(r.day), Number(r.count));
 
     const out: CalendarDay[] = [];
     for (let i = 0; i < days; i++) {
       const d = new Date(startMs + i * 24 * 60 * 60 * 1000);
-      const key = isoDate(d);
+      const key = isoDateKst(d);
       out.push({
         date: key,
         newCount: newMap.get(key) ?? 0,
@@ -395,8 +390,8 @@ export class JobsCronService {
     }
 
     return {
-      startDate: out[0]?.date ?? isoDate(today),
-      endDate: out[out.length - 1]?.date ?? isoDate(new Date(endMs)),
+      startDate: out[0]?.date ?? isoDateKst(today),
+      endDate: out[out.length - 1]?.date ?? isoDateKst(new Date(endMs)),
       days: out,
     };
   }
@@ -499,199 +494,4 @@ export class JobsCronService {
     );
     return { attempted: targets.length, updated, failed };
   }
-}
-
-/**
- * 정렬 옵션 → Prisma orderBy 배열 변환.
- * - 기본('recent'): 등록일 desc, id desc tiebreaker.
- * - 'deadline-soonest':
- *     1순위 `expiredAt asc nulls first` — 만료 안 된 잡(NULL)이 먼저, 만료된 잡은 뒤.
- *     2순위 `deadlineAt asc nulls last` — 임박한 마감일이 먼저, "상시"(NULL)는 뒤.
- *     3순위 `registeredAt desc` — 동일 마감일에서 최신 등록 우선.
- *     4순위 `id desc` — 안정 정렬 tiebreaker.
- *   Prisma 5+ 의 `nulls: 'first'|'last'` 옵션 사용.
- */
-export function buildJobsOrderBy(
-  sort: JobsSort | undefined,
-): Array<Record<string, unknown>> {
-  if (sort === 'deadline-soonest') {
-    return [
-      { expiredAt: { sort: 'asc', nulls: 'first' } },
-      { deadlineAt: { sort: 'asc', nulls: 'last' } },
-      { registeredAt: 'desc' },
-      { id: 'desc' },
-    ];
-  }
-  return [{ registeredAt: 'desc' }, { id: 'desc' }];
-}
-
-/** Prisma where 객체를 JobsQuery에서 합성. primaryJobId: null은 항상 강제. */
-export function buildJobsWhere(opts: JobsQuery): Record<string, unknown> {
-  const where: Record<string, unknown> = { primaryJobId: null };
-  const q = (opts.search ?? '').trim();
-  if (q) {
-    // 동의어 확장: 단일 토큰("원화")이면 같은 그룹의 단어들도 OR로 매칭한다.
-    // 다중 토큰이거나 사전에 없는 단어는 그대로 한 항만 검색됨.
-    const terms = expandSearchTerms(q);
-    where.OR = terms.flatMap((t) => [
-      { title: { contains: t, mode: 'insensitive' as const } },
-      { company: { contains: t, mode: 'insensitive' as const } },
-    ]);
-  }
-  if (opts.experience && opts.experience.length > 0) {
-    where.experienceLevel = { in: opts.experience };
-  }
-  if (opts.employmentType && opts.employmentType.length > 0) {
-    where.employmentType = { in: opts.employmentType };
-  }
-  if (opts.location && opts.location.length > 0) {
-    where.locations = { hasSome: opts.location };
-  }
-  if (opts.remote === true) {
-    where.isRemote = true;
-  }
-  return where;
-}
-
-/**
- * KST 기준 그 날의 자정(00:00:00)에 해당하는 UTC 인스턴트를 반환.
- * 캘린더 그리드의 일자 경계를 일관되게 잡기 위한 헬퍼.
- * 서버 TZ에 관계없이 동작하도록 ISO 문자열을 직접 합성.
- */
-function startOfDayKst(now: Date): Date {
-  // toLocaleDateString을 ko-KR + Asia/Seoul로 호출하면 'YYYY. MM. DD.' 형태.
-  // 안전하게 ISO 파싱 가능한 형태로 만들어 UTC 인스턴트로 환원한다.
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  // en-CA는 'YYYY-MM-DD' 출력 — KST 자정은 UTC로 전날 15:00:00.000.
-  const ymd = fmt.format(now);
-  // ymd + 'T00:00:00+09:00' 으로 KST 자정 인스턴트를 명시.
-  return new Date(`${ymd}T00:00:00+09:00`);
-}
-
-/** Date를 KST 일자 ISO('YYYY-MM-DD') 문자열로. AT TIME ZONE 결과(date 타입)와 형식 일치. */
-function isoDate(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
-}
-
-/**
- * 크롤러가 채워둔 jobplanet URL이 응답에 새어 나가도 안전한지 검증.
- * https + jobplanet.co.kr 도메인만 통과. companies.service.ts의 동일 정책과 일치.
- */
-function safeJobplanetUrl(raw: string | null): string | null {
-  if (!raw) return null;
-  try {
-    const u = new URL(raw);
-    if (u.protocol !== 'https:') return null;
-    if (!/(^|\.)jobplanet\.co\.kr$/i.test(u.hostname)) return null;
-    return u.toString();
-  } catch {
-    return null;
-  }
-}
-
-function isJobSource(s: string): s is JobSource {
-  return (
-    s === 'gamejob' ||
-    s === 'wanted' ||
-    s === 'jobkorea' ||
-    s === 'saramin' ||
-    s === 'incruit'
-  );
-}
-
-export function computeExpired(
-  expiredAt: Date | null,
-  lastSeenAt: Date | null,
-): boolean {
-  if (expiredAt) return true;
-  if (!lastSeenAt) return false;
-  return Date.now() - lastSeenAt.getTime() > EXPIRY_WINDOW_MS;
-}
-
-function asExperience(v: string | null | undefined): ExperienceLevel | null {
-  if (v === 'newcomer' || v === 'junior' || v === 'mid' || v === 'senior' || v === 'any') {
-    return v;
-  }
-  return null;
-}
-
-function asEmployment(v: string | null | undefined): EmploymentType | null {
-  if (
-    v === 'fulltime' ||
-    v === 'contract' ||
-    v === 'parttime' ||
-    v === 'freelance' ||
-    v === 'intern'
-  ) {
-    return v;
-  }
-  return null;
-}
-
-export function toJobDto(
-  row: {
-    id: string;
-    source: string;
-    company: string;
-    companyUrl: string;
-    title: string;
-    detailUrl: string;
-    deadline: string;
-    deadlineAt?: Date | null;
-    registeredAt: Date;
-    tags: string[];
-    gameTitle: string | null;
-    imageQuery: string;
-    imageQueryType: string;
-    companyLogoUrl: string | null;
-    companyPhotos: string[];
-    representativeGames: string[];
-    lastSeenAt?: Date | null;
-    expiredAt?: Date | null;
-    experienceLevel?: string | null;
-    employmentType?: string | null;
-    locations?: string[];
-    isRemote?: boolean;
-  },
-  alternateSources: Job['alternateSources'] = [],
-  jobplanet: JobplanetSummary | null = null,
-): Job {
-  const imageQueryType: Job['imageQueryType'] =
-    row.imageQueryType === 'game' ? 'game' : 'company';
-  const source: JobSource = isJobSource(row.source) ? row.source : 'gamejob';
-  return {
-    id: row.id,
-    source,
-    company: row.company,
-    companyUrl: row.companyUrl,
-    title: row.title,
-    detailUrl: row.detailUrl,
-    deadline: row.deadline,
-    deadlineAt: row.deadlineAt ? row.deadlineAt.toISOString() : null,
-    registeredAt: row.registeredAt.toISOString(),
-    tags: row.tags,
-    gameTitle: row.gameTitle,
-    imageQuery: row.imageQuery,
-    imageQueryType,
-    alternateSources,
-    companyLogoUrl: row.companyLogoUrl,
-    companyPhotos: row.companyPhotos,
-    representativeGames: row.representativeGames,
-    expired: computeExpired(row.expiredAt ?? null, row.lastSeenAt ?? null),
-    experienceLevel: asExperience(row.experienceLevel ?? null),
-    employmentType: asEmployment(row.employmentType ?? null),
-    locations: row.locations ?? [],
-    isRemote: row.isRemote ?? false,
-    jobplanet,
-  };
 }
