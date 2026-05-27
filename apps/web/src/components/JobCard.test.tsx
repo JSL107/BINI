@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { JobCard } from './JobCard';
 import type { Job } from '@bini/types';
+import { STORAGE_KEY as SEEN_STORAGE_KEY } from '../lib/seen-jobs';
 
 vi.mock('./JobImageCarousel', () => ({
   JobImageCarousel: ({ jobId }: { jobId: string }) => (
@@ -185,6 +186,46 @@ describe('JobCard', () => {
       render(<JobCard job={job} />);
       expect(screen.getByText(/★\s*4\.5/)).toBeInTheDocument();
       expect(screen.queryByText(/\(0\)|\(null\)/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('본적있음 뱃지', () => {
+    beforeEach(() => {
+      window.localStorage.clear();
+    });
+    afterEach(() => {
+      window.localStorage.clear();
+    });
+
+    it('localStorage에 없으면 뱃지 미표시', () => {
+      render(<JobCard job={baseJob} />);
+      expect(screen.queryByText('본적있음')).not.toBeInTheDocument();
+    });
+
+    it('localStorage에 jobId가 있으면 뱃지 표시', () => {
+      window.localStorage.setItem(
+        SEEN_STORAGE_KEY,
+        JSON.stringify({ [baseJob.id]: Date.now() }),
+      );
+      render(<JobCard job={baseJob} />);
+      expect(screen.getByText('본적있음')).toBeInTheDocument();
+    });
+
+    it('상세 링크 클릭 시 localStorage에 jobId가 기록됨', () => {
+      render(<JobCard job={baseJob} />);
+      const titleLink = screen.getByRole('link', { name: /배경 도트 디자이너/ });
+      fireEvent.click(titleLink);
+      const stored = JSON.parse(window.localStorage.getItem(SEEN_STORAGE_KEY) ?? '{}');
+      expect(stored[baseJob.id]).toBeTypeOf('number');
+    });
+
+    it('다른 jobId만 저장돼 있으면 본 카드엔 뱃지 없음(false-positive 방지)', () => {
+      window.localStorage.setItem(
+        SEEN_STORAGE_KEY,
+        JSON.stringify({ 'gamejob:999999': Date.now() }),
+      );
+      render(<JobCard job={baseJob} />);
+      expect(screen.queryByText('본적있음')).not.toBeInTheDocument();
     });
   });
 });
