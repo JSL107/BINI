@@ -112,8 +112,14 @@ export function JobCard({ job }: { job: Job }) {
             )}
           </span>
           {job.expired ? (
-            <span className="rounded bg-gray-200 px-1.5 py-0.5 text-xs font-medium text-gray-700">
-              마감
+            // "종료" = BINI cron이 7일째 사이트에서 못 본 공고 (lastSeenAt + 7d).
+            // 회사가 명시한 마감일과 다른 개념이라 이전의 "마감" 라벨은 혼동을 유발했음.
+            // 카드 하단의 "마감 5월 31일" 텍스트가 회사 마감일이고, 이 뱃지는 BINI 보드의 종료 신호.
+            <span
+              className="rounded bg-gray-200 px-1.5 py-0.5 text-xs font-medium text-gray-700"
+              title="BINI가 7일째 원본 사이트에서 이 공고를 못 봤습니다 (사이트에서 내려갔을 가능성)"
+            >
+              종료
             </span>
           ) : badge === 'urgent' ? (
             <span
