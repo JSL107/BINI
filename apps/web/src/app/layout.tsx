@@ -1,6 +1,16 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+
+// Next.js 16: viewport는 별도 export. 미설정 시 일부 브라우저에서 모바일 뷰포트가
+// 데스크탑(980px)으로 잡혀 글자 크기·터치 영역이 어긋난다.
+// initialScale=1 + width=device-width로 정상 모바일 렌더 보장.
+// maximumScale은 의도적으로 미설정 — 사용자 접근성 차원에서 줌 제한 안 함.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#ffffff",
+};
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
