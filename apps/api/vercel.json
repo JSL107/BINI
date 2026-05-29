@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm --filter @bini/types build && pnpm --filter api exec prisma generate && pnpm --filter api exec prisma migrate deploy && pnpm --filter api build",
+  "//": "buildCommand에서 prisma migrate deploy 제거. Neon serverless가 빌드 시점에 잠들어 있으면 P1001로 빌드 전체가 실패하기 때문. 마이그레이션은 GH Actions cron(refresh-jobs.yml)이 3시간마다 `pnpm --filter api build`로 호출하는 api/package.json build 스크립트가 자동 적용한다. 새 마이그레이션 머지 후 최대 3시간 내 반영, 즉시 필요하면 workflow_dispatch로 수동 trigger.",
+  "buildCommand": "pnpm --filter @bini/types build && pnpm --filter api exec prisma generate && pnpm --filter api exec nest build",
   "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }]
 }
