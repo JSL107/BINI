@@ -199,8 +199,9 @@ export function JobImageModal({
         </div>
 
         {/* Image area — fixed letterbox frame keeps all slides visually uniform
-            regardless of source aspect ratio. */}
-        <div className="relative flex aspect-[16/9] w-[80vw] max-w-5xl items-center justify-center rounded bg-black/85 shadow-xl">
+            regardless of source aspect ratio. 모바일은 좁은 폭이라 95vw로 더 차지,
+            데스크탑은 sm:w-[80vw]로 기존 디자인 유지. */}
+        <div className="relative flex aspect-[16/9] w-[95vw] max-w-5xl items-center justify-center rounded bg-black/85 shadow-xl sm:w-[80vw]">
           {failedUrls.has(url) ? (
             <div className="flex flex-col items-center gap-2 px-6 text-center text-white/90">
               <p className="text-sm">이미지를 불러올 수 없습니다</p>
@@ -235,11 +236,13 @@ export function JobImageModal({
               }}
             />
           )}
+          {/* 닫기 — 모바일은 노치/edge 안전영역 안에 두기 위해 프레임 내부 우측 상단에
+              배치(right-2 top-2). 데스크탑은 기존대로 프레임 밖으로 살짝 띄움. */}
           <button
             type="button"
             aria-label="닫기"
             onClick={() => onCloseRef.current()}
-            className="absolute -right-3 -top-3 h-9 w-9 rounded-full bg-white text-xl shadow hover:bg-gray-50"
+            className="absolute right-2 top-2 z-10 h-9 w-9 rounded-full bg-white text-xl shadow hover:bg-gray-50 sm:-right-3 sm:-top-3"
           >
             ×
           </button>
@@ -266,14 +269,16 @@ export function JobImageModal({
               </span>
             </>
           )}
-          {/* "원본 새 창" — 모달 이미지 클릭 affordance가 없다는 피드백 반영. 명시적 링크로 노출. */}
+          {/* "원본 새 창" — 모달 이미지 클릭 affordance가 없다는 피드백 반영. 명시적 링크로 노출.
+              모바일 좁은 폭에선 텍스트 축약("원본 ↗")으로 옆 신고 버튼과 안 겹치게. */}
           <a
             href={url}
             target="_blank"
             rel="noopener noreferrer"
             className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded bg-white/85 px-2 py-1 text-xs font-medium text-gray-700 shadow hover:bg-white"
           >
-            원본 새 창에서 보기 ↗
+            <span className="sm:hidden">원본 ↗</span>
+            <span className="hidden sm:inline">원본 새 창에서 보기 ↗</span>
           </a>
           {onReportBad && (
             <button
@@ -299,7 +304,8 @@ export function JobImageModal({
                 <path d="M3 21V4h12l-1.5 4L15 12H3" />
                 <line x1="3" y1="21" x2="3" y2="3" />
               </svg>
-              잘못된 이미지 신고
+              {/* 모바일은 아이콘만(텍스트 숨김) — 좁은 폭에서 원본 버튼과 안 겹치게. */}
+              <span className="hidden sm:inline">잘못된 이미지 신고</span>
             </button>
           )}
         </div>
