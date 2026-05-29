@@ -1,0 +1,29 @@
+{
+  "name": "BINI · 게임 원화 채용공고",
+  "short_name": "BINI",
+  "description": "한국 게임 회사 원화·컨셉아트 채용 공고 통합. 게임잡·원티드·잡코리아·사람인·인크루트 한 곳에서.",
+  "lang": "ko-KR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "browser"],
+  "orientation": "portrait-primary",
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/icon-app.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["productivity", "business"]
+}

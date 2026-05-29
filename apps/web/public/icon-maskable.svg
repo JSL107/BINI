@@ -1,0 +1,14 @@
+<!--
+  Android adaptive icon — Maskable variant.
+  외곽 10%는 OS mask가 잘라낼 수 있는 영역이라 콘텐츠는 inner 80%(=viewBox 10-90)
+  안에만 둔다. 배경은 전체를 채워 어떤 mask 형태(원/squircle/squarcle)에서도
+  여백이 안 보이게 한다. icon.svg의 시각 요소를 80% 영역에 정렬해 옮긴 버전.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" fill="#2563eb"/>
+  <circle cx="36" cy="44" r="6" fill="#fbbf24"/>
+  <circle cx="64" cy="38" r="6" fill="#ef4444"/>
+  <circle cx="70" cy="66" r="6" fill="#10b981"/>
+  <circle cx="40" cy="70" r="6" fill="#8b5cf6"/>
+  <text x="50" y="64" font-family="system-ui,sans-serif" font-size="40" font-weight="700" text-anchor="middle" fill="#ffffff">B</text>
+</svg>
