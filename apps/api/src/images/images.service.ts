@@ -8,6 +8,7 @@ import type {
   SearchOptions,
 } from '../image/image-provider';
 import { PrismaService } from '../prisma/prisma.service';
+import { BadImageService } from './bad-image.service';
 
 const STATUSES: ImageStatus[] = ['found', 'not_found', 'error', 'blocked'];
 function toStatus(v: string): ImageStatus {
@@ -37,6 +38,7 @@ export class ImagesService {
     private readonly naver: GameImageService,
     private readonly googleApi: GoogleImageService,
     private readonly prisma: PrismaService,
+    private readonly badImage: BadImageService,
   ) {}
 
   async resolve(
@@ -61,7 +63,11 @@ export class ImagesService {
         cached.status === 'not_found' &&
         this.googleApi.isConfigured();
       if (!upgradeable) {
-        return { query, imageUrl: cached.imageUrl, status: toStatus(cached.status) };
+        return this.maskIfBlocked({
+          query,
+          imageUrl: cached.imageUrl,
+          status: toStatus(cached.status),
+        });
       }
     }
 
@@ -70,13 +76,31 @@ export class ImagesService {
     const existing = this.inflight.get(inflightKey);
     if (existing) return existing;
 
-    const work = this.fetchAndCache(query, queryType, options);
+    // mask를 inflight promise 안에 합성 — 같은 query의 동시 요청들이 모두 동일한
+    // (이미 mask된) 결과를 공유하도록.
+    const work = this.fetchAndCache(query, queryType, options).then((r) =>
+      this.maskIfBlocked(r),
+    );
     this.inflight.set(inflightKey, work);
     try {
       return await work;
     } finally {
       this.inflight.delete(inflightKey);
     }
+  }
+
+  /**
+   * 해상도된 단일 url이 사용자 신고로 차단된 상태면 imageUrl을 null로 비우고
+   * `not_found`로 깎는다. 차단 url을 캐시에서 삭제하지는 않는다 —
+   * 분석/audit 용도 보존 + 다음 크론에서 재해석 여지.
+   */
+  private async maskIfBlocked(
+    result: GameImageResponse,
+  ): Promise<GameImageResponse> {
+    if (!result.imageUrl) return result;
+    const blocked = await this.badImage.findBlocked([result.imageUrl]);
+    if (blocked.size === 0) return result;
+    return { query: result.query, imageUrl: null, status: 'not_found' };
   }
 
   private async fetchAndCache(
