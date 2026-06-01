@@ -2,9 +2,10 @@ import { ImagesService } from './images.service';
 import { GameImageService } from '../image/game-image.service';
 import { GoogleImageService } from '../image/google-image.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { BadImageService } from './bad-image.service';
 
 describe('ImagesService', () => {
-  function build() {
+  function build(blockedSet: ReadonlySet<string> = new Set()) {
     const findUnique = jest.fn().mockResolvedValue(null);
     const upsert = jest.fn().mockResolvedValue(undefined);
     const search = jest.fn();
@@ -16,12 +17,20 @@ describe('ImagesService', () => {
       source: 'google-api',
       isConfigured: () => false,
     } as unknown as GoogleImageService;
+    const badImage = {
+      findBlocked: jest
+        .fn()
+        .mockImplementation(async (urls: readonly string[]) =>
+          new Set(urls.filter((u) => blockedSet.has(u))),
+        ),
+    } as unknown as BadImageService;
     return {
-      service: new ImagesService(provider, googleApi, prisma),
+      service: new ImagesService(provider, googleApi, prisma, badImage),
       findUnique,
       upsert,
       search,
       googleSearch,
+      badImage,
     };
   }
 
@@ -89,5 +98,52 @@ describe('ImagesService', () => {
     resolveSearch({ imageUrl: 'https://img/x.jpg', status: 'found' });
     await Promise.all([p1, p2]);
     expect(search).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * 회귀 가드: `/game-image` fallback 경로(`JobImageCarousel`의 단일 이미지 폴백)
+   * 가 사용자 신고를 우회하던 버그. 캐시 히트든 신선 fetch든 응답 url이 신고된
+   * 상태면 imageUrl=null로 깎인다.
+   */
+  describe('사용자 신고 차단', () => {
+    it('캐시 히트 url이 신고된 상태면 imageUrl을 비우고 not_found로 깎는다', async () => {
+      const { service, findUnique } = build(new Set(['https://img/cached.jpg']));
+      findUnique.mockResolvedValue({
+        query: '신고된 게임',
+        queryType: 'game',
+        imageUrl: 'https://img/cached.jpg',
+        status: 'found',
+      });
+      const result = await service.resolve('신고된 게임', 'game');
+      expect(result).toEqual({
+        query: '신고된 게임',
+        imageUrl: null,
+        status: 'not_found',
+      });
+    });
+
+    it('새로 fetch한 url이 신고된 상태면 캐시는 저장하되 응답은 차단한다', async () => {
+      const { service, search, upsert } = build(new Set(['https://img/new.jpg']));
+      search.mockResolvedValue({ imageUrl: 'https://img/new.jpg', status: 'found' });
+      const result = await service.resolve('새 게임', 'game');
+      expect(upsert).toHaveBeenCalledTimes(1); // 캐시는 저장 (다음 크론에서 재해석)
+      expect(result).toEqual({
+        query: '새 게임',
+        imageUrl: null,
+        status: 'not_found',
+      });
+    });
+
+    it('신고되지 않은 url은 그대로 통과한다', async () => {
+      const { service, findUnique } = build(new Set(['https://other/x.jpg']));
+      findUnique.mockResolvedValue({
+        query: '정상 게임',
+        queryType: 'game',
+        imageUrl: 'https://img/cached.jpg',
+        status: 'found',
+      });
+      const result = await service.resolve('정상 게임', 'game');
+      expect(result.imageUrl).toBe('https://img/cached.jpg');
+    });
   });
 });

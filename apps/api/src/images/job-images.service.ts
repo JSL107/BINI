@@ -181,13 +181,18 @@ export class JobImagesService {
 
     // 사용자 신고로 차단된 URL 제거 — 부적절·오매칭 이미지를 자가학습으로 거른다.
     // DB lookup이라 다중 인스턴스에서도 신고 즉시 반영 (메모리 캐시 staleness 없음).
-    const gameImages = await this.badImage.filterUrls(gameImagesRaw);
+    // 게임/회사 후보군을 union해 한 번에 차단 판정 → DB roundtrip 1회로 단축.
+    const blocked = await this.badImage.findBlocked([
+      ...gameImagesRaw,
+      ...job.companyPhotos,
+    ]);
+    const gameImages = gameImagesRaw.filter((u) => !blocked.has(u));
 
     // Cross-tab URL dedup: if a body image happened to also be in CoImage/VIew
     // (rare but possible — same blob path), the game tab wins.
     const gameSet = new Set(gameImages);
-    const companyPhotos = await this.badImage.filterUrls(
-      job.companyPhotos.filter((u) => !gameSet.has(u)),
+    const companyPhotos = job.companyPhotos.filter(
+      (u) => !gameSet.has(u) && !blocked.has(u),
     );
 
     const images = dedup([...gameImages, ...companyPhotos]);
