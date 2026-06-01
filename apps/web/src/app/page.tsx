@@ -103,6 +103,9 @@ export default async function Home({
         <a href="/calendar" className="text-gray-600 hover:text-gray-900 hover:underline">
           캘린더
         </a>
+        <a href="/saved" className="text-gray-600 hover:text-gray-900 hover:underline">
+          스크랩
+        </a>
       </nav>
       <h1 className="mb-4 text-2xl font-bold">게임 원화 채용공고</h1>
       <NewSinceBadge />

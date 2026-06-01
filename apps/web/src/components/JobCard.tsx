@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { Job, JobSource } from '@bini/types';
 import { JobImageCarousel } from './JobImageCarousel';
+import { SaveJobButton } from './SaveJobButton';
 import { CompanyAvatar } from './CompanyAvatar';
 import { PortfolioMatchBadge } from './PortfolioMatchBadge';
 import { deadlineBadge, deadlineStatusFromJob } from '../lib/deadline';
@@ -90,6 +91,8 @@ export function JobCard({ job }: { job: Job }) {
           fallbackType={job.imageQueryType}
           alt={job.title}
         />
+        {/* 스크랩(별) 버튼 — 이미지 좌측 상단. 우측 상단의 "본적있음" 뱃지와 안 겹친다. */}
+        <SaveJobButton job={job} />
         {seen && (
           <span
             className="absolute right-2 top-2 z-10 rounded-md bg-emerald-500/95 px-1.5 py-0.5 text-[11px] font-semibold text-white shadow-sm ring-1 ring-emerald-600/30"

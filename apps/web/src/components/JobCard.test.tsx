@@ -16,6 +16,12 @@ vi.mock('./CompanyAvatar', () => ({
   ),
 }));
 
+// SaveJobButton은 자체 localStorage + useEffect를 갖고 있어 JobCard 단위 테스트엔
+// 격리한다. 자체 spec(SaveJobButton.test.tsx)에서 본 책임을 검증.
+vi.mock('./SaveJobButton', () => ({
+  SaveJobButton: () => <div data-testid="save-button-stub" />,
+}));
+
 const baseJob: Job = {
   id: '278454',
   source: 'gamejob' as const,

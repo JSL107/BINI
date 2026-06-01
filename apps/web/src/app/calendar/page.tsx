@@ -36,6 +36,9 @@ export default async function CalendarPage() {
           포트폴리오
         </Link>
         <span className="font-semibold text-gray-900">캘린더</span>
+        <Link href="/saved" className="text-gray-600 hover:text-gray-900 hover:underline">
+          스크랩
+        </Link>
       </nav>
 
       <header className="mb-6">
