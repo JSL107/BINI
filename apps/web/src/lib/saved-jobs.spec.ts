@@ -330,5 +330,88 @@ describe('saved-jobs', () => {
         'offered',
       ]);
     });
+
+    it('SAVED_APPLICATION_STATUSES는 frozen (외부 mutate 차단)', () => {
+      expect(Object.isFrozen(SAVED_APPLICATION_STATUSES)).toBe(true);
+    });
+
+    it('mixed entry: 한 entry meta만 손상돼도 다른 entry의 valid meta는 보존', () => {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          good: {
+            savedAt: 100,
+            job: mkJob('good'),
+            status: 'applied',
+            note: '좋은 메모',
+            updatedAt: 200,
+          },
+          bad: {
+            savedAt: 100,
+            job: mkJob('bad'),
+            status: 'invalid',
+            note: 123,
+            updatedAt: 'oops',
+          },
+        }),
+      );
+      const map = loadSavedJobs();
+      expect(map['good'].status).toBe('applied');
+      expect(map['good'].note).toBe('좋은 메모');
+      expect(map['good'].updatedAt).toBe(200);
+      expect(map['bad']).toBeDefined();
+      expect(map['bad'].status).toBeUndefined();
+      expect(map['bad'].note).toBeUndefined();
+      expect(map['bad'].updatedAt).toBeUndefined();
+    });
+
+    it('note가 비문자열(숫자/배열)이면 무시 (entry는 보존)', () => {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          'gamejob:1': {
+            savedAt: 100,
+            job: mkJob('gamejob:1'),
+            note: 42,
+          },
+        }),
+      );
+      const entry = loadSavedJobs()['gamejob:1'];
+      expect(entry).toBeDefined();
+      expect(entry.note).toBeUndefined();
+    });
+  });
+
+  describe('LRU 메타 보호', () => {
+    it('메타 있는 entry는 메타 없는 oldest보다 우선 보존된다', () => {
+      // 100건 prepopulate: 0~49는 oldest + meta 있음, 50~99는 newer + meta 없음.
+      const seed: Record<string, { savedAt: number; job: Job; note?: string }> = {};
+      for (let i = 0; i < 100; i++) {
+        const id = `job:${i}`;
+        const e: { savedAt: number; job: Job; note?: string } = {
+          savedAt: 1000 + i,
+          job: mkJob(id),
+        };
+        if (i < 50) e.note = `${i} 메모`;
+        seed[id] = e;
+      }
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+
+      // 새 저장(meta 없음) → cap 트리거.
+      saveJob(mkJob('job:new'));
+      const after = loadSavedJobs();
+
+      // 51건 남음 (101 - 50).
+      expect(Object.keys(after)).toHaveLength(51);
+      // 메타 있는 oldest 0~49 — 모두 보존됨.
+      for (let i = 0; i < 50; i++) {
+        expect(after[`job:${i}`]).toBeDefined();
+      }
+      // 메타 없는 newer 50~99 — drop 후보. 50건 drop 정확.
+      for (let i = 50; i < 100; i++) {
+        expect(after[`job:${i}`]).toBeUndefined();
+      }
+      expect(after['job:new']).toBeDefined();
+    });
   });
 });

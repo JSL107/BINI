@@ -35,13 +35,16 @@ export type SavedApplicationStatus =
   | 'rejected'
   | 'offered';
 
-export const SAVED_APPLICATION_STATUSES: readonly SavedApplicationStatus[] = [
-  'considering',
-  'applied',
-  'interview',
-  'rejected',
-  'offered',
-] as const;
+// Object.freeze로 런타임 mutate 차단 — `isValidStatus`/필터 카운트가 이 배열을
+// 직접 참조하므로 외부에서 push/pop 당하면 정합성이 깨진다.
+export const SAVED_APPLICATION_STATUSES: readonly SavedApplicationStatus[] =
+  Object.freeze([
+    'considering',
+    'applied',
+    'interview',
+    'rejected',
+    'offered',
+  ] as const);
 
 export const SAVED_APPLICATION_STATUS_LABELS: Record<SavedApplicationStatus, string> = {
   considering: '검토중',
@@ -137,10 +140,20 @@ export function saveJob(job: Job): boolean {
 
   const keys = Object.keys(current);
   if (keys.length > SAVED_CAP) {
-    // LRU drop — savedAt asc(가장 오래 전 저장)부터 50건(Math.floor(100/2)) drop.
+    // LRU drop — 메타(note/status)가 있는 entry는 사용자 직접 입력이라 silently
+    // 손실되지 않도록 drop 후순위로 둔다. 메타 없는 entry부터 savedAt asc로,
+    // 그 후 메타 있는 entry도 savedAt asc로 — 결과적으로 메타 없는 oldest →
+    // 메타 있는 oldest 순으로 50건(Math.floor(100/2)) drop.
     const sorted = keys
-      .map((k) => [k, current[k].savedAt] as const)
-      .sort((a, b) => a[1] - b[1]);
+      .map((k) => {
+        const e = current[k];
+        const hasMeta = Boolean(e.note || e.status);
+        return [k, e.savedAt, hasMeta] as const;
+      })
+      .sort((a, b) => {
+        if (a[2] !== b[2]) return a[2] ? 1 : -1;
+        return a[1] - b[1];
+      });
     const drop = sorted.slice(0, Math.floor(SAVED_CAP / 2));
     for (const [k] of drop) delete current[k];
   }

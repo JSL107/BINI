@@ -113,4 +113,48 @@ describe('SavedJobMetaEditor', () => {
     fireEvent.blur(ta);
     expect(window.localStorage.getItem(SAVED_STORAGE_KEY)).toBe(before);
   });
+
+  it('blur 후 textarea도 trim된 형태로 정렬된다 (draft vs 저장값 불일치 방지)', () => {
+    render(<SavedJobMetaEditor job={mkJob('gamejob:1')} note={undefined} status={undefined} />);
+    const ta = screen.getByPlaceholderText(/메모/) as HTMLTextAreaElement;
+    fireEvent.change(ta, { target: { value: '  메모  ' } });
+    fireEvent.blur(ta);
+    expect(loadSavedJobs()['gamejob:1'].note).toBe('메모');
+    expect(ta.value).toBe('메모');
+  });
+
+  it('"검토중" 클릭은 status를 미설정(undefined)으로 저장 (명시 considering 미사용)', () => {
+    window.localStorage.setItem(
+      SAVED_STORAGE_KEY,
+      JSON.stringify({
+        'gamejob:1': {
+          savedAt: Date.now(),
+          job: mkJob('gamejob:1'),
+          status: 'applied',
+        },
+      }),
+    );
+    render(
+      <SavedJobMetaEditor job={mkJob('gamejob:1')} note={undefined} status="applied" />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /검토중/ }));
+    expect(loadSavedJobs()['gamejob:1'].status).toBeUndefined();
+  });
+
+  it('입력 중엔 외부 prop 변경 무시, blur 후엔 외부값으로 회복', () => {
+    saveJob(mkJob('gamejob:1'));
+    const { rerender } = render(
+      <SavedJobMetaEditor job={mkJob('gamejob:1')} note="기존" status={undefined} />,
+    );
+    const ta = screen.getByPlaceholderText(/메모/) as HTMLTextAreaElement;
+    ta.focus();
+    // 외부에서 note 변경 (다른 탭/카드 동기화) — 입력 중이라 draft에 안 덮임.
+    rerender(
+      <SavedJobMetaEditor job={mkJob('gamejob:1')} note="외부 변경" status={undefined} />,
+    );
+    expect(ta.value).toBe('기존');
+    // 사용자가 아무 입력 없이 blur — 외부 변경이 회복돼야 한다.
+    fireEvent.blur(ta);
+    expect(ta.value).toBe('외부 변경');
+  });
 });

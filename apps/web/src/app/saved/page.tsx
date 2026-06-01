@@ -171,8 +171,10 @@ export default function SavedJobsPage() {
         </div>
       ) : (
         <>
+          {/* radiogroup 패턴 — tab은 aria-controls + tabpanel을 요구하나 여기선
+              필터된 그리드가 별도 panel 구조가 아니라 단일 단상 콘텐츠라 radio가 의미상 맞다. */}
           <div
-            role="tablist"
+            role="radiogroup"
             aria-label="상태 필터"
             className="mb-3 flex flex-wrap items-center gap-1.5"
           >
@@ -185,8 +187,8 @@ export default function SavedJobsPage() {
                 <button
                   key={key}
                   type="button"
-                  role="tab"
-                  aria-selected={active}
+                  role="radio"
+                  aria-checked={active}
                   onClick={() => setFilter(key)}
                   className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${cls}`}
                 >

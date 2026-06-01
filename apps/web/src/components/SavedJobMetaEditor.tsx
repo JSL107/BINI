@@ -43,7 +43,10 @@ export interface SavedJobMetaEditorProps {
 export function SavedJobMetaEditor({ job, note, status }: SavedJobMetaEditorProps) {
   // 로컬 입력 버퍼 — 외부 entry 갱신과 입력 도중 충돌 회피.
   const [draft, setDraft] = useState(note ?? '');
+  // 우리가 마지막으로 commit/동기화한 정규화(trimmed) 값. note prop도 저장 시
+  // trim되므로 같은 형태로 비교한다.
   const lastCommittedRef = useRef(note ?? '');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // 외부에서 note가 바뀌면(다른 탭/다른 컴포넌트 동기화) 입력 중이 아닐 때만 동기화.
   useEffect(() => {
@@ -53,16 +56,31 @@ export function SavedJobMetaEditor({ job, note, status }: SavedJobMetaEditorProp
     }
   }, [note]);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
   function commitNote() {
-    if (draft === lastCommittedRef.current) return;
-    updateSavedJobMeta(job.id, { note: draft });
-    lastCommittedRef.current = draft;
+    const trimmed = draft.trim().slice(0, 500);
+    if (trimmed !== lastCommittedRef.current) {
+      // 사용자 변경 있음 — commit + 화면도 정규화 형태로 정렬.
+      updateSavedJobMeta(job.id, { note: trimmed });
+      lastCommittedRef.current = trimmed;
+      if (draft !== trimmed) setDraft(trimmed);
+      return;
+    }
+    // 사용자 변경 없음. blur 시점에 외부 prop이 우리가 마지막 본 값과 다르면
+    // 입력 중에 막아둔 외부 변경이 있었던 것 — 회복.
+    const external = note ?? '';
+    if (external !== lastCommittedRef.current) {
+      lastCommittedRef.current = external;
+      setDraft(external);
+    }
   }
 
   function pickStatus(next: SavedApplicationStatus) {
-    // 같은 chip을 다시 누르면 미설정으로 되돌리는 토글.
+    // 'considering'은 미설정과 시각적으로 동일하게 표시되므로 internal state도
+    // 한 가지로 통합(undefined). 그 외 상태는 같은 chip 재클릭으로 미설정 토글.
+    if (next === 'considering') {
+      updateSavedJobMeta(job.id, { status: null });
+      return;
+    }
     const value = status === next ? null : next;
     updateSavedJobMeta(job.id, { status: value });
   }
