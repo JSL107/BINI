@@ -134,6 +134,8 @@ export function JobImageCarousel({
   /**
    * "이 이미지 잘못됐어요" — confirm 후 서버에 신고 + 카루셀/모달 state에서
    * 같은 URL을 모두 제거 (optimistic). 신고는 fire-and-forget (API 실패해도 UX 흐름 유지).
+   * 새로고침 후 다시 노출되지 않는 보장은 서버(`BadImageService`)가 DB lookup으로
+   * 매 요청 차단 판정하므로 다중 인스턴스에서도 즉시 반영된다.
    */
   const reportBad = useCallback(
     (badUrl: string) => {
