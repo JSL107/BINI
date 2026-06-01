@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ServiceWorkerRegister } from "../components/ServiceWorkerRegister";
 
 // Next.js 16: viewport는 별도 export. 미설정 시 일부 브라우저에서 모바일 뷰포트가
 // 데스크탑(980px)으로 잡혀 글자 크기·터치 영역이 어긋난다.
@@ -28,6 +29,19 @@ export const metadata: Metadata = {
     "한국 게임 회사의 원화·컨셉아트 채용 공고를 한 곳에서. 게임잡·원티드·잡코리아·사람인·인크루트 통합 — 등록일순 정렬, 회사·게임 이미지 함께.",
   applicationName: "BINI",
   keywords: ["게임", "원화", "컨셉아트", "채용", "게임잡", "원티드", "잡코리아", "사람인", "인크루트"],
+  // PWA — Chrome/Edge가 매니페스트 + SW를 보면 "Add to Home Screen" 프롬프트를 띄운다.
+  manifest: "/manifest.webmanifest",
+  // iOS Safari는 manifest를 부분적으로만 인식. 별도 메타로 앱 이름/touch icon 지정.
+  // SVG touch icon은 iOS에서 적용 안 될 수 있어 PNG 후속 추가 필요 (v1 한계).
+  appleWebApp: {
+    capable: true,
+    title: "BINI",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [{ url: "/icon-app.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon-app.svg", type: "image/svg+xml" }],
+  },
   openGraph: {
     title: "BINI · 게임 원화 채용공고",
     description: "한국 게임 회사 원화·컨셉아트 채용 공고 통합",
@@ -46,7 +60,11 @@ export default function RootLayout({
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        {/* /sw.js 등록 client 컴포넌트. 프로덕션에서만 동작, render 0. */}
+        <ServiceWorkerRegister />
+      </body>
     </html>
   );
 }
