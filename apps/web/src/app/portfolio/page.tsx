@@ -28,6 +28,9 @@ export default function PortfolioPage() {
         <Link href="/calendar" className="text-gray-600 hover:text-gray-900 hover:underline">
           캘린더
         </Link>
+        <Link href="/saved" className="text-gray-600 hover:text-gray-900 hover:underline">
+          스크랩
+        </Link>
       </nav>
 
       <header className="mb-6">

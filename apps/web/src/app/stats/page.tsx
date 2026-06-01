@@ -60,6 +60,9 @@ export default async function StatsPage() {
         <a href="/calendar" className="text-gray-600 hover:text-gray-900 hover:underline">
           캘린더
         </a>
+        <a href="/saved" className="text-gray-600 hover:text-gray-900 hover:underline">
+          스크랩
+        </a>
       </nav>
 
       <h1 className="mb-6 text-2xl font-bold">멀티소스 적재 현황</h1>
