@@ -1,10 +1,8 @@
 import { BadImageService } from './bad-image.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-function build(seed: string[] = []) {
-  const findMany = jest
-    .fn()
-    .mockResolvedValue(seed.map((imageUrl) => ({ imageUrl })));
+function build() {
+  const findMany = jest.fn().mockResolvedValue([]);
   const create = jest.fn().mockResolvedValue({});
   const prisma = {
     badImageReport: { findMany, create },
@@ -13,74 +11,86 @@ function build(seed: string[] = []) {
 }
 
 describe('BadImageService', () => {
-  it('onModuleInit 시 DB에서 신고된 URL을 메모리 set으로 로드한다', async () => {
-    const { service, findMany } = build([
-      'https://bad.example.com/1.jpg',
-      'https://bad.example.com/2.jpg',
-    ]);
-    await service.onModuleInit();
-    expect(findMany).toHaveBeenCalledTimes(1);
-    expect(service.isBlocked('https://bad.example.com/1.jpg')).toBe(true);
-    expect(service.isBlocked('https://bad.example.com/2.jpg')).toBe(true);
-    expect(service.isBlocked('https://ok.example.com/x.jpg')).toBe(false);
+  it('filterUrls: 빈 입력엔 DB query 없이 빈 배열 반환', async () => {
+    const { service, findMany } = build();
+    const out = await service.filterUrls([]);
+    expect(out).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
   });
 
-  it('onModuleInit DB 실패 시에도 throw하지 않고 빈 set으로 계속한다', async () => {
-    const findMany = jest.fn().mockRejectedValue(new Error('db down'));
-    const create = jest.fn();
-    const prisma = {
-      badImageReport: { findMany, create },
-    } as unknown as PrismaService;
-    const svc = new BadImageService(prisma);
-    await expect(svc.onModuleInit()).resolves.toBeUndefined();
-    expect(svc.isBlocked('anything')).toBe(false);
-  });
-
-  it('filterUrls는 차단 URL을 제거하고 순서를 보존한다', async () => {
-    const { service } = build(['https://b.example.com/x']);
-    await service.onModuleInit();
-    const out = service.filterUrls([
-      'https://a.example.com/x',
-      'https://b.example.com/x',
-      'https://c.example.com/x',
-    ]);
-    expect(out).toEqual(['https://a.example.com/x', 'https://c.example.com/x']);
-  });
-
-  it('차단된 게 없으면 입력을 그대로 새 배열로 반환 (참조 동일 X)', async () => {
-    const { service } = build([]);
-    await service.onModuleInit();
-    const input = ['https://a/x'];
-    const out = service.filterUrls(input);
+  it('filterUrls: 차단 URL이 없으면 입력을 그대로 새 배열로 반환', async () => {
+    const { service, findMany } = build();
+    const input = ['https://a/x', 'https://b/x'];
+    const out = await service.filterUrls(input);
     expect(out).toEqual(input);
-    expect(out).not.toBe(input); // 새 배열
+    expect(out).not.toBe(input);
+    expect(findMany).toHaveBeenCalledWith({
+      where: { imageUrl: { in: input } },
+      select: { imageUrl: true },
+    });
   });
 
-  it('report는 DB INSERT + 메모리 set에 즉시 추가한다', async () => {
-    const { service, create } = build([]);
-    await service.onModuleInit();
-    expect(service.isBlocked('https://x.example.com/bad.jpg')).toBe(false);
-    await service.report('https://x.example.com/bad.jpg', 'gamejob:123', 'wrong game');
+  it('filterUrls: 차단된 URL을 제거하고 순서를 보존한다', async () => {
+    const { service, findMany } = build();
+    findMany.mockResolvedValueOnce([{ imageUrl: 'https://b/x' }]);
+    const out = await service.filterUrls([
+      'https://a/x',
+      'https://b/x',
+      'https://c/x',
+    ]);
+    expect(out).toEqual(['https://a/x', 'https://c/x']);
+  });
+
+  it('report: DB INSERT — jobId/reason 전달', async () => {
+    const { service, create } = build();
+    await service.report('https://x/bad', 'gamejob:123', 'wrong game');
     expect(create).toHaveBeenCalledWith({
       data: {
-        imageUrl: 'https://x.example.com/bad.jpg',
+        imageUrl: 'https://x/bad',
         jobId: 'gamejob:123',
         reason: 'wrong game',
       },
     });
-    expect(service.isBlocked('https://x.example.com/bad.jpg')).toBe(true);
   });
 
-  it('report 시 jobId/reason이 null이면 Prisma에 undefined로 변환해 전달', async () => {
-    const { service, create } = build([]);
-    await service.onModuleInit();
-    await service.report('https://x.example.com/bad.jpg', null, null);
+  it('report: jobId/reason이 null이면 Prisma에 undefined로 변환해 전달', async () => {
+    const { service, create } = build();
+    await service.report('https://x/bad', null, null);
     expect(create).toHaveBeenCalledWith({
       data: {
-        imageUrl: 'https://x.example.com/bad.jpg',
+        imageUrl: 'https://x/bad',
         jobId: undefined,
         reason: undefined,
       },
     });
+  });
+
+  /**
+   * Vercel 서버리스 다중 인스턴스 회귀 가드: 한 인스턴스에서 report 후 다른
+   * 인스턴스가 응답해도, 메모리 캐시가 없으므로 DB lookup으로 즉시 차단된다.
+   */
+  it('report 직후 filterUrls는 신고된 URL을 즉시 차단한다 (메모리 캐시 미사용 회귀 가드)', async () => {
+    const reported: string[] = [];
+    const findMany = jest.fn().mockImplementation((args: {
+      where: { imageUrl: { in: string[] } };
+    }) =>
+      Promise.resolve(
+        reported
+          .filter((u) => args.where.imageUrl.in.includes(u))
+          .map((u) => ({ imageUrl: u })),
+      ),
+    );
+    const create = jest.fn().mockImplementation((args: { data: { imageUrl: string } }) => {
+      reported.push(args.data.imageUrl);
+      return Promise.resolve({});
+    });
+    const prisma = {
+      badImageReport: { findMany, create },
+    } as unknown as PrismaService;
+    const service = new BadImageService(prisma);
+
+    await service.report('https://x/bad', null, null);
+    const out = await service.filterUrls(['https://x/bad', 'https://ok/y']);
+    expect(out).toEqual(['https://ok/y']);
   });
 });
