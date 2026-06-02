@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Job } from '@bini/types';
 import {
+  SAVED_APPLICATION_STATUSES,
   SAVED_JOBS_CHANGE_EVENT,
   STORAGE_KEY,
   clearSavedJobs,
@@ -11,6 +12,7 @@ import {
   loadSavedJobs,
   saveJob,
   unsaveJob,
+  updateSavedJobMeta,
 } from './saved-jobs';
 
 function mkJob(id: string, over: Partial<Job> = {}): Job {
@@ -181,5 +183,235 @@ describe('saved-jobs', () => {
     // 경계: 첫 50개(job:0~job:49)는 drop, 그 이후는 보존
     expect(after['job:49']).toBeUndefined();
     expect(after['job:50']).toBeDefined();
+  });
+
+  describe('updateSavedJobMeta', () => {
+    it('미저장 잡엔 적용하지 않고 false', () => {
+      const ok = updateSavedJobMeta('gamejob:none', { status: 'applied' });
+      expect(ok).toBe(false);
+      expect(loadSavedJobs()).toEqual({});
+    });
+
+    it('status 설정 → entry에 status + updatedAt 저장', () => {
+      saveJob(mkJob('gamejob:1'));
+      const before = Date.now();
+      const ok = updateSavedJobMeta('gamejob:1', { status: 'applied' });
+      expect(ok).toBe(true);
+      const entry = loadSavedJobs()['gamejob:1'];
+      expect(entry.status).toBe('applied');
+      expect(entry.updatedAt).toBeGreaterThanOrEqual(before);
+    });
+
+    it('status null/undefined → 필드 삭제 ("미설정"으로 되돌리기)', () => {
+      saveJob(mkJob('gamejob:1'));
+      updateSavedJobMeta('gamejob:1', { status: 'applied' });
+      updateSavedJobMeta('gamejob:1', { status: null });
+      const entry = loadSavedJobs()['gamejob:1'];
+      expect(entry.status).toBeUndefined();
+    });
+
+    it('잘못된 status는 미설정으로 처리 (enum 외 값은 무시)', () => {
+      saveJob(mkJob('gamejob:1'));
+      // @ts-expect-error — 런타임 방어 검증.
+      updateSavedJobMeta('gamejob:1', { status: 'wat' });
+      expect(loadSavedJobs()['gamejob:1'].status).toBeUndefined();
+    });
+
+    it('note 설정 → trim + 저장', () => {
+      saveJob(mkJob('gamejob:1'));
+      updateSavedJobMeta('gamejob:1', { note: '  지원 완료. 1차 면접 6/5.  ' });
+      expect(loadSavedJobs()['gamejob:1'].note).toBe('지원 완료. 1차 면접 6/5.');
+    });
+
+    it('note 500자 cap', () => {
+      saveJob(mkJob('gamejob:1'));
+      const long = 'a'.repeat(1000);
+      updateSavedJobMeta('gamejob:1', { note: long });
+      expect(loadSavedJobs()['gamejob:1'].note?.length).toBe(500);
+    });
+
+    it('note 빈 문자열/null/공백뿐 → 필드 삭제', () => {
+      saveJob(mkJob('gamejob:1'));
+      updateSavedJobMeta('gamejob:1', { note: '메모' });
+      updateSavedJobMeta('gamejob:1', { note: '   ' });
+      expect(loadSavedJobs()['gamejob:1'].note).toBeUndefined();
+      updateSavedJobMeta('gamejob:1', { note: '메모2' });
+      updateSavedJobMeta('gamejob:1', { note: null });
+      expect(loadSavedJobs()['gamejob:1'].note).toBeUndefined();
+    });
+
+    it('patch에 키가 없으면 해당 필드는 안 건드림', () => {
+      saveJob(mkJob('gamejob:1'));
+      updateSavedJobMeta('gamejob:1', { note: '유지', status: 'applied' });
+      // status만 변경 — note는 그대로
+      updateSavedJobMeta('gamejob:1', { status: 'interview' });
+      const entry = loadSavedJobs()['gamejob:1'];
+      expect(entry.note).toBe('유지');
+      expect(entry.status).toBe('interview');
+    });
+
+    it('CustomEvent 발행 (다른 카드/탭 동기화)', () => {
+      saveJob(mkJob('gamejob:1'));
+      let fired = 0;
+      const handler = () => fired++;
+      window.addEventListener(SAVED_JOBS_CHANGE_EVENT, handler);
+      updateSavedJobMeta('gamejob:1', { status: 'applied' });
+      window.removeEventListener(SAVED_JOBS_CHANGE_EVENT, handler);
+      expect(fired).toBe(1);
+    });
+  });
+
+  describe('saveJob/unsaveJob meta interaction', () => {
+    it('재저장(별 다시 누르기)은 기존 note/status를 보존한다', () => {
+      saveJob(mkJob('gamejob:1', { title: '옛 제목' }));
+      updateSavedJobMeta('gamejob:1', { note: '메모', status: 'interview' });
+      saveJob(mkJob('gamejob:1', { title: '새 제목' }));
+      const entry = loadSavedJobs()['gamejob:1'];
+      expect(entry.job.title).toBe('새 제목');
+      expect(entry.note).toBe('메모');
+      expect(entry.status).toBe('interview');
+    });
+
+    it('unsave 후 재저장은 빈 메타로 시작 (해제로 사용자 메타 정리 의도)', () => {
+      saveJob(mkJob('gamejob:1'));
+      updateSavedJobMeta('gamejob:1', { note: '메모', status: 'applied' });
+      unsaveJob('gamejob:1');
+      saveJob(mkJob('gamejob:1'));
+      const entry = loadSavedJobs()['gamejob:1'];
+      expect(entry.note).toBeUndefined();
+      expect(entry.status).toBeUndefined();
+    });
+  });
+
+  describe('loadSavedJobs 메타 검증', () => {
+    it('유효 status / note / updatedAt은 로드', () => {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          'gamejob:1': {
+            savedAt: 100,
+            job: mkJob('gamejob:1'),
+            note: '메모',
+            status: 'applied',
+            updatedAt: 200,
+          },
+        }),
+      );
+      const entry = loadSavedJobs()['gamejob:1'];
+      expect(entry.note).toBe('메모');
+      expect(entry.status).toBe('applied');
+      expect(entry.updatedAt).toBe(200);
+    });
+
+    it('손상 status (enum 외) / updatedAt 비숫자는 drop, entry 자체는 보존', () => {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          'gamejob:1': {
+            savedAt: 100,
+            job: mkJob('gamejob:1'),
+            status: 'invalid',
+            updatedAt: 'oops',
+          },
+        }),
+      );
+      const entry = loadSavedJobs()['gamejob:1'];
+      expect(entry).toBeDefined();
+      expect(entry.status).toBeUndefined();
+      expect(entry.updatedAt).toBeUndefined();
+    });
+
+    it('SAVED_APPLICATION_STATUSES는 5단계 enum', () => {
+      expect(SAVED_APPLICATION_STATUSES).toEqual([
+        'considering',
+        'applied',
+        'interview',
+        'rejected',
+        'offered',
+      ]);
+    });
+
+    it('SAVED_APPLICATION_STATUSES는 frozen (외부 mutate 차단)', () => {
+      expect(Object.isFrozen(SAVED_APPLICATION_STATUSES)).toBe(true);
+    });
+
+    it('mixed entry: 한 entry meta만 손상돼도 다른 entry의 valid meta는 보존', () => {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          good: {
+            savedAt: 100,
+            job: mkJob('good'),
+            status: 'applied',
+            note: '좋은 메모',
+            updatedAt: 200,
+          },
+          bad: {
+            savedAt: 100,
+            job: mkJob('bad'),
+            status: 'invalid',
+            note: 123,
+            updatedAt: 'oops',
+          },
+        }),
+      );
+      const map = loadSavedJobs();
+      expect(map['good'].status).toBe('applied');
+      expect(map['good'].note).toBe('좋은 메모');
+      expect(map['good'].updatedAt).toBe(200);
+      expect(map['bad']).toBeDefined();
+      expect(map['bad'].status).toBeUndefined();
+      expect(map['bad'].note).toBeUndefined();
+      expect(map['bad'].updatedAt).toBeUndefined();
+    });
+
+    it('note가 비문자열(숫자/배열)이면 무시 (entry는 보존)', () => {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          'gamejob:1': {
+            savedAt: 100,
+            job: mkJob('gamejob:1'),
+            note: 42,
+          },
+        }),
+      );
+      const entry = loadSavedJobs()['gamejob:1'];
+      expect(entry).toBeDefined();
+      expect(entry.note).toBeUndefined();
+    });
+  });
+
+  describe('LRU 메타 보호', () => {
+    it('메타 있는 entry는 메타 없는 oldest보다 우선 보존된다', () => {
+      // 100건 prepopulate: 0~49는 oldest + meta 있음, 50~99는 newer + meta 없음.
+      const seed: Record<string, { savedAt: number; job: Job; note?: string }> = {};
+      for (let i = 0; i < 100; i++) {
+        const id = `job:${i}`;
+        const e: { savedAt: number; job: Job; note?: string } = {
+          savedAt: 1000 + i,
+          job: mkJob(id),
+        };
+        if (i < 50) e.note = `${i} 메모`;
+        seed[id] = e;
+      }
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+
+      // 새 저장(meta 없음) → cap 트리거.
+      saveJob(mkJob('job:new'));
+      const after = loadSavedJobs();
+
+      // 51건 남음 (101 - 50).
+      expect(Object.keys(after)).toHaveLength(51);
+      // 메타 있는 oldest 0~49 — 모두 보존됨.
+      for (let i = 0; i < 50; i++) {
+        expect(after[`job:${i}`]).toBeDefined();
+      }
+      // 메타 없는 newer 50~99 — drop 후보. 50건 drop 정확.
+      for (let i = 50; i < 100; i++) {
+        expect(after[`job:${i}`]).toBeUndefined();
+      }
+      expect(after['job:new']).toBeDefined();
+    });
   });
 });
