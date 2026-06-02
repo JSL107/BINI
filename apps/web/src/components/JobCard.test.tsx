@@ -194,6 +194,60 @@ describe('JobCard', () => {
     });
   });
 
+  describe('expired 카드 opacity 위치', () => {
+    // 회귀: 이전엔 article 전체에 opacity-60을 걸어 이미지 자식(JobImageCarousel)
+    // 까지 흐릿했고, 그 안에서 띄우는 사진 확대 모달(JobImageModal)도 CSS
+    // opacity cascade로 흐려졌다. opacity는 본문 텍스트 영역에만 적용돼야 한다.
+    //
+    // root cause는 단지 'opacity-60' 클래스가 아니라 "fixed descendant에 cascade될 수
+    // 있는 모든 CSS property"이다. 미래에 누군가 ancestor에 filter/transform/isolation
+    // 같은 stacking-context property를 추가해도 동일 버그가 재발한다. 그래서 회귀 검증을
+    // opacity 단일 토큰이 아니라 cascade-bearing className regex로 일반화한다.
+    const CASCADE_RISK_RE =
+      /(^|\s)(opacity-|filter\b|backdrop-filter\b|transform\b|scale-|rotate-|translate-|skew-|blur-|isolate\b|will-change-)/;
+
+    function hasCascadeRiskAncestor(el: Element | null): boolean {
+      let cur: Element | null = el?.parentElement ?? null;
+      while (cur) {
+        const cls = cur.getAttribute('class') ?? '';
+        if (CASCADE_RISK_RE.test(cls)) return true;
+        cur = cur.parentElement;
+      }
+      return false;
+    }
+
+    it('expired=true여도 article element 자체엔 opacity/filter/transform/isolation 류 클래스가 없다', () => {
+      const job: Job = { ...baseJob, expired: true };
+      const { container } = render(<JobCard job={job} />);
+      const article = container.querySelector('article');
+      expect(article).not.toBeNull();
+      expect(CASCADE_RISK_RE.test(article!.className)).toBe(false);
+    });
+
+    it('expired=true면 본문(텍스트) 영역에만 opacity-60', () => {
+      const job: Job = { ...baseJob, expired: true };
+      render(<JobCard job={job} />);
+      // 본문 영역엔 제목 링크가 있으므로 그 ancestor 중 opacity-60 element가 1개 잡혀야 한다.
+      const titleLink = screen.getByRole('link', { name: /배경 도트 디자이너/ });
+      expect(titleLink.closest('.opacity-60')).not.toBeNull();
+    });
+
+    it('expired=true에도 이미지 영역(carousel)의 어떤 ancestor에도 cascade-bearing CSS가 없다', () => {
+      // 핵심 회귀: carousel의 DOM 조상 어디에도 opacity/filter/transform/isolation 등
+      // stacking-context를 만드는 처리가 없어야 fixed descendant(JobImageModal)가 정상이다.
+      const job: Job = { ...baseJob, expired: true };
+      render(<JobCard job={job} />);
+      const carousel = screen.getByTestId('carousel');
+      expect(hasCascadeRiskAncestor(carousel)).toBe(false);
+    });
+
+    it('expired=false면 본문에도 opacity 없음', () => {
+      render(<JobCard job={baseJob} />);
+      const titleLink = screen.getByRole('link', { name: /배경 도트 디자이너/ });
+      expect(titleLink.closest('.opacity-60')).toBeNull();
+    });
+  });
+
   describe('본적있음 뱃지', () => {
     beforeEach(() => {
       window.localStorage.clear();
