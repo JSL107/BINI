@@ -81,9 +81,17 @@ export function JobCard({ job }: { job: Job }) {
   }, [job.id]);
 
   return (
-    <article
-      className={`overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm ${job.expired ? 'opacity-60' : ''}`}
-    >
+    // opacity는 article 전체가 아니라 본문(텍스트) 영역에만 적용한다. article에
+    // 걸면 CSS opacity가 fixed descendant에도 cascade되어, 자식인 JobImageCarousel
+    // 의 이미지 클릭으로 띄우는 JobImageModal까지 흐릿하게 보이던 버그가 발생.
+    // 종료 시각 신호는 본문 dim + 상단 "종료" 뱃지로 충분히 전달된다.
+    //
+    // 같은 이유로 이 <article>과 첫 자식 <div className="relative">에는
+    // opacity / filter / transform / will-change / backdrop-filter / isolation
+    // (stacking context를 만드는 모든 CSS property) 을 추가하지 말 것.
+    // 이들 중 어느 하나라도 ancestor로 걸리면 fixed인 JobImageModal에 cascade되어
+    // 같은 버그가 재발한다. 회귀 가드는 JobCard.test.tsx의 "expired 카드 opacity 위치" 블록.
+    <article className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="relative">
         <JobImageCarousel
           jobId={job.id}
@@ -103,7 +111,7 @@ export function JobCard({ job }: { job: Job }) {
           </span>
         )}
       </div>
-      <div className="space-y-2 p-4">
+      <div className={`space-y-2 p-4 ${job.expired ? 'opacity-60' : ''}`}>
         <div className="flex flex-wrap items-center gap-2">
           <CompanyAvatar logoUrl={job.companyLogoUrl} name={job.company} />
           <span
