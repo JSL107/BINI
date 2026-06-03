@@ -227,6 +227,14 @@ export function JobImageCarousel({
           role="button"
           tabIndex={0}
           aria-label={`${alt} 크게 보기`}
+          /* 네이버/잡사이트 외부 호스트 이미지가 카드별로 다수 — viewport 밖 카드는
+             브라우저가 다운로드를 보류하도록 native lazy load 활성화.
+             IntersectionObserver는 API fetch만 지연했지 img 자체는 즉시 다운로드됐다.
+             priority 분기(첫 N개 eager + high)는 단계 2의 Next.js <Image> 마이그레이션에서
+             정식 도입 — 여기선 lazy만 적용해 viewport 안 카드의 LCP 영향은 0(브라우저
+             기본 priority 유지). */
+          loading="lazy"
+          decoding="async"
           className="h-48 w-full cursor-zoom-in object-cover transition-transform duration-200 group-hover:scale-[1.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           onError={() => dropFailed(url)}
           onClick={openModal}

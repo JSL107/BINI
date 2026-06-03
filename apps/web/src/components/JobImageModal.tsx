@@ -223,6 +223,14 @@ export function JobImageModal({
               key={url}
               src={url}
               alt={alt}
+              /* user가 모달을 열어 큰 사진을 즉시 봐야 하는 명시적 user intent.
+                 loading="eager"는 default이지만 부모 carousel이 lazy hint를 emit하는
+                 동안 모달이 자연스럽게 priority bucket을 못 받을 수 있어 명시.
+                 fetchPriority="high"로 같은 origin의 다른 fetch(다음 페이지 prefetch
+                 등)에 양보하지 않게 함. decoding="async"로 디코드 단계는 main thread 밖. */
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
               className="max-h-full max-w-full object-contain"
               onError={() => {
                 // 실패 URL만 표시하고 자동 advance하지 않는다 — 여러 슬라이드가 모두 실패할 때

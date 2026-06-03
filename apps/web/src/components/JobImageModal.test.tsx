@@ -89,6 +89,26 @@ describe('JobImageModal', () => {
     expect(document.body.style.overflow).toBe('auto');
   });
 
+  it('모달 큰 이미지에 loading="eager" / fetchPriority="high" / decoding="async" 적용', () => {
+    // user 명시적 클릭으로 열린 모달 — LCP가 아니라 interaction latency 영역.
+    // 부모 carousel이 lazy hint를 emit 중일 수 있어 명시적 eager/high로 우선순위 확보.
+    render(
+      <JobImageModal
+        open
+        gameImages={['https://example.com/a.jpg']}
+        companyPhotos={[]}
+        initialUrl="https://example.com/a.jpg"
+        alt="alt-text"
+        onClose={() => {}}
+      />,
+    );
+    const img = screen.getByAltText('alt-text');
+    expect(img.tagName).toBe('IMG');
+    expect(img).toHaveAttribute('loading', 'eager');
+    expect(img).toHaveAttribute('decoding', 'async');
+    expect(img.getAttribute('fetchpriority')).toBe('high');
+  });
+
   it('"잘못된 이미지 신고" 버튼이 현재 url로 onReportBad 호출 + 백드롭 전파 차단', () => {
     const onReportBad = vi.fn();
     const onClose = vi.fn();
