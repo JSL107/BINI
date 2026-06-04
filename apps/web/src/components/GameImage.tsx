@@ -50,6 +50,8 @@ export function GameImage({ query, type }: { query: string; type: ImageQueryType
     <img
       src={state.url}
       alt={query}
+      loading="lazy"
+      decoding="async"
       className="h-40 w-full object-cover"
       onError={() => setState({ kind: 'placeholder' })}
     />

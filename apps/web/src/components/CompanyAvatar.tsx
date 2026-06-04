@@ -26,6 +26,11 @@ export function CompanyAvatar({ logoUrl, name }: CompanyAvatarProps) {
         data-testid="company-logo"
         src={logoUrl}
         alt={`${name} 로고`}
+        /* 외부 호스트(인크루트 l.incru.it, 게임잡 file.gamejob.co.kr 등) 다수가 카드별로 1개씩.
+           lazy 없으면 React 19 SSR이 첫 화면 자원으로 hoist해 head에 preload link를 다수 박고,
+           Slow 4G 환경에선 connection pool exhaustion으로 NO_FCP가 발생. lazy/async로 회피. */
+        loading="lazy"
+        decoding="async"
         className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
         onError={() => setFailed(true)}
       />

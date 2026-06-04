@@ -79,6 +79,9 @@ export default async function CompanyPage({
           <img
             src={data.logoUrl}
             alt={`${data.name} 로고`}
+            /* 회사 페이지 헤더의 단일 로고 — 진입 즉시 보여야 하므로 lazy 안 함.
+               decoding="async"만 추가해 디코드 단계는 main thread 밖. */
+            decoding="async"
             className="h-16 w-16 rounded-lg border border-gray-200 object-contain"
           />
         ) : (
@@ -190,6 +193,9 @@ export default async function CompanyPage({
                 key={url}
                 src={url}
                 alt={`${data.name} 회사 사진 ${i + 1}`}
+                /* below-the-fold 회사 사진 그리드 — viewport 밖이면 다운로드 보류. */
+                loading="lazy"
+                decoding="async"
                 className="h-32 w-full rounded border border-gray-200 object-cover"
               />
             ))}
