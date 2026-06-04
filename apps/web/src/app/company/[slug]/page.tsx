@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { fetchCompanyByName } from '../../../lib/api';
@@ -75,10 +76,15 @@ export default async function CompanyPage({
 
       <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         {data.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={data.logoUrl}
             alt={`${data.name} 로고`}
+            width={64}
+            height={64}
+            /* 회사 페이지 헤더 — LCP candidate. priority는 <link rel="preload">만
+               emit하므로 fetchPriority hint는 명시. */
+            priority
+            fetchPriority="high"
             className="h-16 w-16 rounded-lg border border-gray-200 object-contain"
           />
         ) : (
@@ -185,13 +191,20 @@ export default async function CompanyPage({
           <h2 className="mb-2 text-sm font-semibold text-gray-700">회사 사진</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {data.photos.slice(0, 8).map((url, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              // ring-1으로 border 효과 — content box 외부 1px이라 grid gap에 영향 없음.
+              // border 사용 시 wrapper 외곽이 +2px씩 늘어 카드 간격이 시각적으로 미세 차이.
+              <div
                 key={url}
-                src={url}
-                alt={`${data.name} 회사 사진 ${i + 1}`}
-                className="h-32 w-full rounded border border-gray-200 object-cover"
-              />
+                className="relative h-32 w-full overflow-hidden rounded ring-1 ring-gray-200"
+              >
+                <Image
+                  src={url}
+                  alt={`${data.name} 회사 사진 ${i + 1}`}
+                  fill
+                  sizes="(min-width: 640px) 25vw, 50vw"
+                  className="object-cover"
+                />
+              </div>
             ))}
           </div>
         </section>
@@ -205,8 +218,9 @@ export default async function CompanyPage({
           <p className="text-sm text-gray-500">현재 등록된 공고가 없습니다.</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {data.jobs.map((job) => (
-              <JobCard key={job.id} job={job} />
+            {data.jobs.map((job, i) => (
+              // idx<3 첫 줄 카드만 priority — 메인 페이지와 동일 정책.
+              <JobCard key={job.id} job={job} priority={i < 3} />
             ))}
           </div>
         )}

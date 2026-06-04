@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 
 export type ImageTab = 'game' | 'company';
 
@@ -218,20 +219,18 @@ export function JobImageModal({
               </a>
             </div>
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            /* user 클릭으로 열린 큰 이미지. priority는 <link rel="preload">만 emit해서
+               fetchPriority hint는 별도로 명시. fill 모드로 부모 letterbox 박스
+               (aspect-[16/9])를 채움. */
+            <Image
               key={url}
               src={url}
               alt={alt}
-              /* user가 모달을 열어 큰 사진을 즉시 봐야 하는 명시적 user intent.
-                 loading="eager"는 default이지만 부모 carousel이 lazy hint를 emit하는
-                 동안 모달이 자연스럽게 priority bucket을 못 받을 수 있어 명시.
-                 fetchPriority="high"로 같은 origin의 다른 fetch(다음 페이지 prefetch
-                 등)에 양보하지 않게 함. decoding="async"로 디코드 단계는 main thread 밖. */
-              loading="eager"
+              fill
+              sizes="(min-width: 640px) 80vw, 95vw"
+              priority
               fetchPriority="high"
-              decoding="async"
-              className="max-h-full max-w-full object-contain"
+              className="object-contain"
               onError={() => {
                 // 실패 URL만 표시하고 자동 advance하지 않는다 — 여러 슬라이드가 모두 실패할 때
                 // 무한 ←→ 토글 루프가 발생하던 버그 방지. 사용자가 prev/next로 직접 이동.

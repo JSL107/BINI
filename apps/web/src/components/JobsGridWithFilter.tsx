@@ -89,8 +89,11 @@ export function JobsGridWithFilter({ jobs }: { jobs: Job[] }) {
         <p className="text-gray-500">선택한 소스에 공고가 없습니다.</p>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((job) => (
-            <JobCard key={job.id} job={job} />
+          {filtered.map((job, i) => (
+            // priority — 데스크탑 grid-cols-3 첫 줄(idx<3)만 next/image priority로
+            // preload + fetchPriority="high". 나머지는 자동 lazy load. 모바일은 한 줄에
+            // 1장이라 첫 카드 1개만 의미 있지만 idx<3 일괄 적용해도 추가 비용은 미미.
+            <JobCard key={job.id} job={job} priority={i < 3} />
           ))}
         </div>
       )}

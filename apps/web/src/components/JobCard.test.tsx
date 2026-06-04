@@ -5,8 +5,13 @@ import type { Job } from '@bini/types';
 import { STORAGE_KEY as SEEN_STORAGE_KEY } from '../lib/seen-jobs';
 
 vi.mock('./JobImageCarousel', () => ({
-  JobImageCarousel: ({ jobId }: { jobId: string }) => (
-    <div data-testid="carousel">{jobId}</div>
+  // priority prop을 data attribute로 노출 — JobCard가 부모에서 받은 priority를
+  // 정확히 캐러셀로 전달하는지 회귀 가드. 누락 시 첫 화면 카드의 LCP hint가
+  // silent하게 사라진다.
+  JobImageCarousel: ({ jobId, priority }: { jobId: string; priority?: boolean }) => (
+    <div data-testid="carousel" data-priority={String(priority ?? false)}>
+      {jobId}
+    </div>
   ),
 }));
 
@@ -67,6 +72,18 @@ describe('JobCard', () => {
   it('jobId를 JobImageCarousel에 전달한다', () => {
     render(<JobCard job={baseJob} />);
     expect(screen.getByTestId('carousel')).toHaveTextContent('278454');
+  });
+
+  describe('priority prop 흐름', () => {
+    it('default(priority 미지정)는 false로 전달', () => {
+      render(<JobCard job={baseJob} />);
+      expect(screen.getByTestId('carousel')).toHaveAttribute('data-priority', 'false');
+    });
+
+    it('priority=true는 JobImageCarousel로 그대로 전달', () => {
+      render(<JobCard job={baseJob} priority />);
+      expect(screen.getByTestId('carousel')).toHaveAttribute('data-priority', 'true');
+    });
   });
 
   it('CompanyAvatar에 logoUrl과 회사명을 전달한다', () => {

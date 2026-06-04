@@ -55,7 +55,14 @@ function ratingTone(rating: number): string {
 /** 한 카드에 표시할 태그 상한. 초과분은 +N 인디케이터로 압축. */
 const TAG_DISPLAY_CAP = 5;
 
-export function JobCard({ job }: { job: Job }) {
+export function JobCard({
+  job,
+  priority = false,
+}: {
+  job: Job;
+  /** 첫 화면 카드(데스크탑 grid 첫 줄)에서 true — 이미지 캐러셀에 priority hint 전달. */
+  priority?: boolean;
+}) {
   // 서버 cron이 채워둔 job.deadlineAt을 우선 사용. NULL이면 원본 텍스트로 폴백.
   const deadline = deadlineStatusFromJob(job);
   const badge = deadlineBadge(deadline);
@@ -98,6 +105,7 @@ export function JobCard({ job }: { job: Job }) {
           fallbackQuery={job.imageQuery}
           fallbackType={job.imageQueryType}
           alt={job.title}
+          priority={priority}
         />
         {/* 스크랩(별) 버튼 — 이미지 좌측 상단. 우측 상단의 "본적있음" 뱃지와 안 겹친다. */}
         <SaveJobButton job={job} />
