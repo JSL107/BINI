@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import type { ImageQueryType } from '@bini/types';
 import { fetchGameImage, fetchJobImages, reportBadImage } from '../lib/api';
 import { JobImageModal } from './JobImageModal';
@@ -25,6 +26,15 @@ export interface JobImageCarouselProps {
   fallbackQuery: string;
   fallbackType: ImageQueryType;
   alt: string;
+  /**
+   * true면 next/image priority + 명시적 fetchPriority="high".
+   * - priority: next/image가 <link rel="preload">를 head에 emit.
+   * - fetchPriority="high": 컴포넌트에서 별도로 추가 (priority만으론 hint 안 emit됨).
+   * - 추가로 IntersectionObserver gating을 우회 — priority 카드는 viewport
+   *   진입을 기다리지 않고 즉시 fetch해 LCP candidate를 빠르게 표시.
+   * 첫 화면 카드(데스크탑 grid-cols-3 첫 줄 = idx<3)에만 부모가 true 전달.
+   */
+  priority?: boolean;
 }
 
 /**
@@ -40,16 +50,20 @@ export function JobImageCarousel({
   fallbackQuery,
   fallbackType,
   alt,
+  priority = false,
 }: JobImageCarouselProps) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [modalOpen, setModalOpen] = useState(false);
-  const [hasIntersected, setHasIntersected] = useState(isSSR);
+  // priority 카드는 viewport 진입을 기다리지 않고 즉시 fetch — LCP candidate가
+  // IntersectionObserver callback(1 frame 지연)을 거치며 늦어지는 회귀 회피.
+  const [hasIntersected, setHasIntersected] = useState(isSSR || priority);
   const touchStartX = useRef<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // IntersectionObserver: 카드가 viewport(200px margin)에 들어오면 fetch 허용
+  // IntersectionObserver: 카드가 viewport(200px margin)에 들어오면 fetch 허용.
+  // priority 카드는 이미 hasIntersected=true라 IO observe도 skip.
   useEffect(() => {
-    if (isSSR) return;
+    if (isSSR || priority) return;
     const el = rootRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -63,7 +77,7 @@ export function JobImageCarousel({
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [priority]);
 
   useEffect(() => {
     if (!hasIntersected) return;
@@ -218,24 +232,25 @@ export function JobImageCarousel({
           if (Math.abs(dx) > 40) advance(dx < 0 ? 1 : -1);
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        {/* next/image fill 모드 — 부모(group relative h-48 w-full)가 박스 크기 결정,
+            Image가 그 안을 채운다. priority prop은 부모가 idx<3 카드만 true로 전달.
+            Next.js 16의 priority는 <link rel="preload">만 emit하므로 LCP hint를 위해
+            fetchPriority="high"를 priority일 때 별도로 명시. sizes는 카드 grid
+            (sm:grid-cols-2, lg:grid-cols-3) 기준 — Vercel이 그에 맞춰 width 변환 +
+            WebP/AVIF로 캐시. */}
+        <Image
           key={url}
           src={url}
           alt={alt}
+          fill
+          sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+          priority={priority}
+          fetchPriority={priority ? 'high' : 'auto'}
           title="클릭해서 크게 보기"
           role="button"
           tabIndex={0}
           aria-label={`${alt} 크게 보기`}
-          /* 네이버/잡사이트 외부 호스트 이미지가 카드별로 다수 — viewport 밖 카드는
-             브라우저가 다운로드를 보류하도록 native lazy load 활성화.
-             IntersectionObserver는 API fetch만 지연했지 img 자체는 즉시 다운로드됐다.
-             priority 분기(첫 N개 eager + high)는 단계 2의 Next.js <Image> 마이그레이션에서
-             정식 도입 — 여기선 lazy만 적용해 viewport 안 카드의 LCP 영향은 0(브라우저
-             기본 priority 유지). */
-          loading="lazy"
-          decoding="async"
-          className="h-48 w-full cursor-zoom-in object-cover transition-transform duration-200 group-hover:scale-[1.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="cursor-zoom-in object-cover transition-transform duration-200 group-hover:scale-[1.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           onError={() => dropFailed(url)}
           onClick={openModal}
           onKeyDown={onImageKeyDown}

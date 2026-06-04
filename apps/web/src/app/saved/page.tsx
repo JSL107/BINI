@@ -209,9 +209,10 @@ export default function SavedJobsPage() {
                   : `${SAVED_APPLICATION_STATUS_LABELS[filter]} ${filtered.length}건 (최근 스크랩순)`}
               </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filtered.map((e) => (
+                {filtered.map((e, i) => (
                   <div key={e.job.id} className="flex flex-col gap-2">
-                    <JobCard job={e.job} />
+                    {/* idx<3 첫 줄 카드만 priority — 메인 페이지와 동일 정책. */}
+                    <JobCard job={e.job} priority={i < 3} />
                     <p className="px-1 text-[11px] text-gray-400">
                       <time dateTime={new Date(e.savedAt).toISOString()}>
                         {formatSavedAgo(e.savedAt)}

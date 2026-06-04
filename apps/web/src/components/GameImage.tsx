@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import type { ImageQueryType } from '@bini/types';
 import { fetchGameImage } from '../lib/api';
 
@@ -46,12 +47,15 @@ export function GameImage({ query, type }: { query: string; type: ImageQueryType
     );
   }
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={state.url}
-      alt={query}
-      className="h-40 w-full object-cover"
-      onError={() => setState({ kind: 'placeholder' })}
-    />
+    <div className="relative h-40 w-full">
+      <Image
+        src={state.url}
+        alt={query}
+        fill
+        sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+        className="object-cover"
+        onError={() => setState({ kind: 'placeholder' })}
+      />
+    </div>
   );
 }

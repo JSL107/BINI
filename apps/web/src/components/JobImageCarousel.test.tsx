@@ -17,7 +17,7 @@ vi.mock('../lib/api', () => ({
 describe('JobImageCarousel — native lazy load 속성', () => {
   afterEach(() => cleanup());
 
-  it('썸네일 img에 loading="lazy" / decoding="async" 적용', async () => {
+  it('priority=false(default)면 lazy + fetchPriority 미설정(또는 auto)', async () => {
     render(
       <JobImageCarousel
         jobId="gamejob:1"
@@ -31,8 +31,28 @@ describe('JobImageCarousel — native lazy load 속성', () => {
     expect(img.tagName).toBe('IMG');
     expect(img).toHaveAttribute('loading', 'lazy');
     expect(img).toHaveAttribute('decoding', 'async');
-    // fetchPriority는 의도적으로 미설정 — 첫 화면 카드(LCP 후보)의 priority bucket을
-    // 강제로 low로 내리지 않기 위해. priority 분기는 단계 2 Next.js <Image>에서 정식 도입.
-    expect(img.hasAttribute('fetchpriority')).toBe(false);
+    // fetchPriority는 priority=false라 high로 안 올라가야 함. 미설정 또는 "auto".
+    const fp = img.getAttribute('fetchpriority');
+    expect(fp === null || fp === 'auto').toBe(true);
+  });
+
+  it('priority=true면 fetchPriority="high" + 비-lazy', async () => {
+    // step 2 핵심 — LCP candidate 카드는 priority가 부모(JobsGridWithFilter)에서 흘러옴.
+    // priority 단독으론 next/image가 <link rel="preload">만 emit하므로 fetchPriority
+    // hint는 컴포넌트에서 명시적으로 emit해야 한다. 이 가드가 없으면 누군가 prop을
+    // 누락해도 silent하게 LCP 부스트가 사라진다.
+    render(
+      <JobImageCarousel
+        jobId="gamejob:1"
+        fallbackQuery="q"
+        fallbackType="company"
+        alt="alt-text"
+        priority
+      />,
+    );
+    const img = await waitFor(() => screen.getByAltText('alt-text'));
+    expect(img.tagName).toBe('IMG');
+    expect(img.getAttribute('loading')).not.toBe('lazy');
+    expect(img.getAttribute('fetchpriority')).toBe('high');
   });
 });

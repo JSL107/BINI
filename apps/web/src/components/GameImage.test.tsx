@@ -17,9 +17,11 @@ describe('GameImage', () => {
       query: '원신 게임', imageUrl: 'https://i/x.jpg', status: 'found',
     });
     render(<GameImage query="원신 게임" type="game" />);
-    await waitFor(() =>
-      expect(screen.getByRole('img')).toHaveAttribute('src', 'https://i/x.jpg'),
-    );
+    // next/image는 src를 `/_next/image?url=<encoded>&w=...&q=75`로 변환하므로
+    // raw URL 정확 일치 대신 원본 URL이 인코딩돼 들어있는지를 검사한다.
+    const img = await waitFor(() => screen.getByRole('img'));
+    const src = img.getAttribute('src') ?? '';
+    expect(decodeURIComponent(src)).toContain('https://i/x.jpg');
   });
 
   it('결과 없음 시 플레이스홀더를 보여준다', async () => {
