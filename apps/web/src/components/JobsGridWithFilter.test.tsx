@@ -34,6 +34,7 @@ function mkJob(over: Partial<Job> & { id: string; source: JobSource }): Job {
     employmentType: null,
     locations: [],
     isRemote: false,
+    thumbnailUrl: null,
     ...over,
   };
 }

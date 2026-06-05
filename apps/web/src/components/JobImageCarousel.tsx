@@ -35,6 +35,13 @@ export interface JobImageCarouselProps {
    * 첫 화면 카드(데스크탑 grid-cols-3 첫 줄 = idx<3)에만 부모가 true 전달.
    */
   priority?: boolean;
+  /**
+   * 서버가 외부 호출 없이 캐시/row에서 뽑은 대표 이미지 1장 (Job.thumbnailUrl).
+   * 있으면 carousel을 'ready'로 시드해 SSR HTML에 즉시 <img>를 박는다 → Speed Index↓.
+   * hydration 후 fetchJobImages가 carousel을 보강하되, 빈 결과/에러면 이 시드를
+   * 유지한다(placeholder로 떨어뜨리지 않음 — 깜빡임/CLS 방지). priority 카드에만 전달됨.
+   */
+  initialThumbnail?: string;
 }
 
 /**
@@ -51,8 +58,19 @@ export function JobImageCarousel({
   fallbackType,
   alt,
   priority = false,
+  initialThumbnail,
 }: JobImageCarouselProps) {
-  const [state, setState] = useState<State>({ kind: 'loading' });
+  const [state, setState] = useState<State>(
+    initialThumbnail
+      ? {
+          kind: 'ready',
+          urls: [initialThumbnail],
+          index: 0,
+          gameImages: [initialThumbnail],
+          companyPhotos: [],
+        }
+      : { kind: 'loading' },
+  );
   const [modalOpen, setModalOpen] = useState(false);
   // priority 카드는 viewport 진입을 기다리지 않고 즉시 fetch — LCP candidate가
   // IntersectionObserver callback(1 frame 지연)을 거치며 늦어지는 회귀 회피.
@@ -82,7 +100,9 @@ export function JobImageCarousel({
   useEffect(() => {
     if (!hasIntersected) return;
     let alive = true;
-    setState({ kind: 'loading' });
+    // initialThumbnail로 시드된 경우 loading 리셋을 건너뛴다 — 이미 보이는 SSR
+    // 이미지를 skeleton으로 되돌리는 깜빡임 방지.
+    if (!initialThumbnail) setState({ kind: 'loading' });
 
     (async () => {
       try {
@@ -114,18 +134,20 @@ export function JobImageCarousel({
             gameImages: [single.imageUrl],
             companyPhotos: [],
           });
-        } else {
+        } else if (!initialThumbnail) {
+          // 빈 결과 — 시드가 없을 때만 placeholder. 시드가 있으면 그대로 유지.
           setState({ kind: 'placeholder' });
         }
       } catch {
-        if (alive) setState({ kind: 'placeholder' });
+        // 에러 — 시드가 없을 때만 placeholder. 시드가 있으면 SSR 이미지를 보존.
+        if (alive && !initialThumbnail) setState({ kind: 'placeholder' });
       }
     })();
 
     return () => {
       alive = false;
     };
-  }, [jobId, fallbackQuery, fallbackType, hasIntersected]);
+  }, [jobId, fallbackQuery, fallbackType, hasIntersected, initialThumbnail]);
 
   const advance = (delta: number) => {
     setState((s) => {

@@ -40,6 +40,7 @@ function mkJob(id: string, over: Partial<Job> = {}): Job {
     employmentType: null,
     locations: [],
     isRemote: false,
+    thumbnailUrl: null,
     ...over,
   };
 }

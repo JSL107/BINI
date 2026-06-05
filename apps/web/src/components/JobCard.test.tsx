@@ -8,8 +8,20 @@ vi.mock('./JobImageCarousel', () => ({
   // priority prop을 data attribute로 노출 — JobCard가 부모에서 받은 priority를
   // 정확히 캐러셀로 전달하는지 회귀 가드. 누락 시 첫 화면 카드의 LCP hint가
   // silent하게 사라진다.
-  JobImageCarousel: ({ jobId, priority }: { jobId: string; priority?: boolean }) => (
-    <div data-testid="carousel" data-priority={String(priority ?? false)}>
+  JobImageCarousel: ({
+    jobId,
+    priority,
+    initialThumbnail,
+  }: {
+    jobId: string;
+    priority?: boolean;
+    initialThumbnail?: string;
+  }) => (
+    <div
+      data-testid="carousel"
+      data-priority={String(priority ?? false)}
+      data-thumb={initialThumbnail ?? ''}
+    >
       {jobId}
     </div>
   ),
@@ -51,6 +63,7 @@ const baseJob: Job = {
   employmentType: null,
   locations: [],
   isRemote: false,
+  thumbnailUrl: null,
 };
 
 describe('JobCard', () => {
@@ -83,6 +96,21 @@ describe('JobCard', () => {
     it('priority=true는 JobImageCarousel로 그대로 전달', () => {
       render(<JobCard job={baseJob} priority />);
       expect(screen.getByTestId('carousel')).toHaveAttribute('data-priority', 'true');
+    });
+  });
+
+  describe('thumbnailUrl 흐름 (SSR 시드)', () => {
+    it('job.thumbnailUrl을 JobImageCarousel의 initialThumbnail로 전달한다', () => {
+      render(<JobCard job={{ ...baseJob, thumbnailUrl: 'https://seed.example.com/s.jpg' }} priority />);
+      expect(screen.getByTestId('carousel')).toHaveAttribute(
+        'data-thumb',
+        'https://seed.example.com/s.jpg',
+      );
+    });
+
+    it('thumbnailUrl이 null이면 initialThumbnail을 전달하지 않는다(빈 값)', () => {
+      render(<JobCard job={baseJob} />);
+      expect(screen.getByTestId('carousel')).toHaveAttribute('data-thumb', '');
     });
   });
 

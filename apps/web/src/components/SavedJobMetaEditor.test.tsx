@@ -35,6 +35,7 @@ function mkJob(id: string): Job {
     employmentType: null,
     locations: [],
     isRemote: false,
+    thumbnailUrl: null,
   };
 }
 
