@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import type { JobsSort } from '@bini/types';
 import { fetchJobs, type JobsQueryOptions } from '../lib/api';
 import { JobsGridWithFilter } from '../components/JobsGridWithFilter';
@@ -134,13 +133,18 @@ export default async function Home({
         )}
       </form>
       {/*
-        AttributeFilterBar는 useSearchParams를 쓰므로 Suspense 경계 필수.
-        Next.js 16: useSearchParams 사용 client 컴포넌트가 Suspense 없이 있으면
-        가장 가까운 prerender 경계가 dynamic으로 전환되고 빌드 경고를 낸다.
+        AttributeFilterBar는 useSearchParams 대신 Page가 파싱한 필터 값을 prop으로
+        받는다 → Suspense/CSR bailout 없이 client 컴포넌트로 정상 SSR되어, 기존의
+        "빈 fallback → 실제 칩" hydration 교체로 발생하던 레이아웃 시프트(CLS)를 제거.
       */}
-      <Suspense fallback={<div className="mb-4 h-32 animate-pulse rounded-lg bg-gray-100" />}>
-        <AttributeFilterBar />
-      </Suspense>
+      <AttributeFilterBar
+        experience={expParam ?? ''}
+        employmentType={empParam ?? ''}
+        location={locParam ?? ''}
+        remote={remoteParam === 'true'}
+        search={search || undefined}
+        sort={sort === 'recent' ? undefined : sort}
+      />
       <div className="mb-4 flex items-center gap-2 text-sm">
         <span className="text-gray-500">정렬</span>
         <a
