@@ -76,12 +76,18 @@ export class JobImagesService {
         where: { id },
         data: {
           detailScrapedAt: new Date(),
-          ...(detail.companyLogoUrl && { companyLogoUrl: detail.companyLogoUrl }),
-          ...(detail.companyPhotos.length > 0 && { companyPhotos: detail.companyPhotos }),
+          ...(detail.companyLogoUrl && {
+            companyLogoUrl: detail.companyLogoUrl,
+          }),
+          ...(detail.companyPhotos.length > 0 && {
+            companyPhotos: detail.companyPhotos,
+          }),
           ...(detail.representativeGames.length > 0 && {
             representativeGames: detail.representativeGames,
           }),
-          ...(detail.bodyImages.length > 0 && { bodyImages: detail.bodyImages }),
+          ...(detail.bodyImages.length > 0 && {
+            bodyImages: detail.bodyImages,
+          }),
         },
       });
     }
@@ -130,7 +136,11 @@ export class JobImagesService {
     representativeGames: string[];
     companyPhotos: string[];
     bodyImages: string[];
-  }): Promise<{ gameImages: string[]; companyPhotos: string[]; images: string[] }> {
+  }): Promise<{
+    gameImages: string[];
+    companyPhotos: string[];
+    images: string[];
+  }> {
     // Dedup query strings BEFORE hitting Naver.
     const uniqueGames = Array.from(new Set(job.representativeGames));
 
@@ -154,7 +164,9 @@ export class JobImagesService {
     // Naver 검색 결과가 무관한 프리랜서 마켓·기술 강의 이미지로 떨어지므로 skip.
     let bracketUrl: string | null = null;
     const otherAvailable =
-      job.bodyImages.length > 0 || namuwikiImages.length > 0 || repImages.length > 0;
+      job.bodyImages.length > 0 ||
+      namuwikiImages.length > 0 ||
+      repImages.length > 0;
     if (
       !otherAvailable &&
       job.imageQueryType === 'game' &&
@@ -212,12 +224,17 @@ export class JobImagesService {
    * 효과가 크고, 2차는 회사명이 너무 좁힌 경우의 커버리지를 보전한다. 두 query
    * 모두 `game_images` 캐시 키가 다르므로 각각 캐시된다.
    */
-  private async resolveRepImage(name: string, company: string): Promise<string | null> {
+  private async resolveRepImage(
+    name: string,
+    company: string,
+  ): Promise<string | null> {
     const cleanCompany = company
       .replace(/[\(\)\[\]"']/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    const primary = cleanCompany ? `${name} ${cleanCompany} 게임` : `${name} 게임`;
+    const primary = cleanCompany
+      ? `${name} ${cleanCompany} 게임`
+      : `${name} 게임`;
     const fallback = `${name} 게임`;
 
     const r1 = await this.images

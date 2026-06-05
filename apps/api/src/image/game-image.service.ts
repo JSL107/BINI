@@ -53,7 +53,10 @@ export class GameImageService implements ImageProvider {
 
       // verifyText 있으면 출처 페이지 title 검증을 통과한 첫 결과만 채택.
       const candidates = parseImageCandidates(html);
-      const verified = await findVerifiedImageUrl(candidates, options.verifyText);
+      const verified = await findVerifiedImageUrl(
+        candidates,
+        options.verifyText,
+      );
       return verified
         ? { imageUrl: verified, status: 'found' }
         : { imageUrl: null, status: 'not_found' };

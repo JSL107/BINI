@@ -36,9 +36,12 @@ export function parseCareerSitesMarkdown(md: string): CareerSiteLink[] {
     // 헤더 감지 — ## 또는 > ### 형식
     if (/^#{2,3}\s/.test(line) || /^>\s*#{2,3}\s/.test(line)) {
       const headerText = line.replace(/^>?\s*#+\s*/, '').trim();
-      if (COMPANY_HEADERS.some((h) => headerText.includes(h))) category = 'company';
-      else if (JOBBOARD_HEADERS.some((h) => headerText.includes(h))) category = 'jobBoard';
-      else if (INFO_HEADERS.some((h) => headerText.includes(h))) category = 'companyInfo';
+      if (COMPANY_HEADERS.some((h) => headerText.includes(h)))
+        category = 'company';
+      else if (JOBBOARD_HEADERS.some((h) => headerText.includes(h)))
+        category = 'jobBoard';
+      else if (INFO_HEADERS.some((h) => headerText.includes(h)))
+        category = 'companyInfo';
       else category = null; // 다른 헤더(Contributor 등)는 분류 끊기
       continue;
     }

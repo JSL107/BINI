@@ -52,7 +52,9 @@ export class JobkoreaDetailService {
       }
       return parseJobkoreaMain(await res.text());
     } catch (err) {
-      this.logger.warn(`jobkorea detail fetch error for Gno=${jobId}: ${String(err)}`);
+      this.logger.warn(
+        `jobkorea detail fetch error for Gno=${jobId}: ${String(err)}`,
+      );
       return EMPTY;
     }
   }
@@ -69,12 +71,16 @@ export class JobkoreaDetailService {
         },
       });
       if (!res.ok) {
-        this.logger.warn(`jobkorea body iframe HTTP ${res.status} for Gno=${jobId}`);
+        this.logger.warn(
+          `jobkorea body iframe HTTP ${res.status} for Gno=${jobId}`,
+        );
         return [];
       }
       return parseJobkoreaBodyImages(await res.text());
     } catch (err) {
-      this.logger.warn(`jobkorea body iframe fetch error for Gno=${jobId}: ${String(err)}`);
+      this.logger.warn(
+        `jobkorea body iframe fetch error for Gno=${jobId}: ${String(err)}`,
+      );
       return [];
     }
   }
@@ -84,7 +90,8 @@ function abs(src: string | undefined | null): string | null {
   if (!src) return null;
   const cleaned = src.replace(/\\/g, '/');
   if (cleaned.startsWith('//')) return 'https:' + cleaned;
-  if (cleaned.startsWith('http://')) return 'https://' + cleaned.slice('http://'.length);
+  if (cleaned.startsWith('http://'))
+    return 'https://' + cleaned.slice('http://'.length);
   if (cleaned.startsWith('https://')) return cleaned;
   if (cleaned.startsWith('/')) return 'https://www.jobkorea.co.kr' + cleaned;
   return null;
@@ -145,7 +152,11 @@ export function parseJobkoreaBodyImages(html: string): string[] {
     const url = abs($(el).attr('src'));
     if (!url) return;
     // 트래커/픽셀 제외
-    if (/(googletagmanager|google-analytics|doubleclick|gtag|gtm\.|criteo)/i.test(url)) {
+    if (
+      /(googletagmanager|google-analytics|doubleclick|gtag|gtm\.|criteo)/i.test(
+        url,
+      )
+    ) {
       return;
     }
     // 일반 이미지 확장자 또는 잡코리아 본문 이미지 호스트.

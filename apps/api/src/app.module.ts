@@ -8,7 +8,13 @@ import { CompaniesModule } from './companies/companies.module';
 import { StatsModule } from './stats/stats.module';
 
 @Module({
-  imports: [PrismaModule, JobsModule, ImagesModule, CompaniesModule, StatsModule],
+  imports: [
+    PrismaModule,
+    JobsModule,
+    ImagesModule,
+    CompaniesModule,
+    StatsModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

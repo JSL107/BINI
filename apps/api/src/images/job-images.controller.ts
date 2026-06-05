@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Controller,
-  Get,
-  Query,
-} from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import type { JobImagesResponse } from '@bini/types';
 import { JobImagesService } from './job-images.service';
 

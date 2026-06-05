@@ -26,8 +26,12 @@ import { JobsCronService } from '../jobs/jobs-cron.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const MAX_PAGES = Number(process.env.CRON_MAX_PAGES ?? '20');
-const EARLY_STOP_THRESHOLD = Number(process.env.CRON_EARLY_STOP_THRESHOLD ?? '0.2');
-const DETAIL_RESCRAPE_LIMIT = Number(process.env.CRON_DETAIL_RESCRAPE_LIMIT ?? '100');
+const EARLY_STOP_THRESHOLD = Number(
+  process.env.CRON_EARLY_STOP_THRESHOLD ?? '0.2',
+);
+const DETAIL_RESCRAPE_LIMIT = Number(
+  process.env.CRON_DETAIL_RESCRAPE_LIMIT ?? '100',
+);
 
 type CronStatus = 'success' | 'partial_failure' | 'total_failure' | 'crashed';
 
@@ -89,7 +93,9 @@ async function main() {
 
       // 사이트 totalPages를 넘으면 중단.
       if (result.totalPages > 0 && page >= result.totalPages) {
-        logger.log(`page ${page}: totalPages(${result.totalPages}) 도달 → 종료`);
+        logger.log(
+          `page ${page}: totalPages(${result.totalPages}) 도달 → 종료`,
+        );
         break;
       }
     }

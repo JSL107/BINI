@@ -36,7 +36,9 @@ describe('parseCareerSitesMarkdown', () => {
 
   it('잡코리아 같은 jobBoard 항목을 인식한다', () => {
     const sites = parseCareerSitesMarkdown(markdown);
-    expect(sites.some((s) => s.category === 'jobBoard' && /잡코리아/.test(s.name))).toBe(true);
+    expect(
+      sites.some((s) => s.category === 'jobBoard' && /잡코리아/.test(s.name)),
+    ).toBe(true);
   });
 
   it('빈 마크다운은 빈 배열 반환', () => {
@@ -67,7 +69,9 @@ describe('parseCareerSitesMarkdown', () => {
     // 대표 회사 몇 개 샘플 검증
     expect(companies.some((s) => s.name.includes('엔픽셀'))).toBe(true);
     expect(companies.some((s) => s.name.includes('라이온하트'))).toBe(true);
-    expect(companies.some((s) => s.name.includes('스튜디오비사이드'))).toBe(true);
+    expect(companies.some((s) => s.name.includes('스튜디오비사이드'))).toBe(
+      true,
+    );
   });
 
   it('크레딧잡은 결과에서 제외한다 (이름/URL 양쪽 모두 차단)', () => {
@@ -94,7 +98,9 @@ describe('canonicalUrlKey', () => {
     expect(canonicalUrlKey('https://www.example.com/careers/')).toBe(
       canonicalUrlKey('http://example.com/careers'),
     );
-    expect(canonicalUrlKey('https://EXAMPLE.com/Path')).toBe('example.com/Path');
+    expect(canonicalUrlKey('https://EXAMPLE.com/Path')).toBe(
+      'example.com/Path',
+    );
   });
 
   it('query/hash는 무시한다', () => {
@@ -115,10 +121,18 @@ describe('canonicalUrlKey', () => {
 describe('dedupeCareerSites', () => {
   it('primary가 같은 URL을 가지면 extra는 무시된다', () => {
     const primary = [
-      { name: '넥슨', url: 'https://career.nexon.com/', category: 'company' as const },
+      {
+        name: '넥슨',
+        url: 'https://career.nexon.com/',
+        category: 'company' as const,
+      },
     ];
     const extra = [
-      { name: 'NEXON Careers', url: 'http://www.career.nexon.com', category: 'company' as const },
+      {
+        name: 'NEXON Careers',
+        url: 'http://www.career.nexon.com',
+        category: 'company' as const,
+      },
     ];
     const merged = dedupeCareerSites(primary, extra);
     expect(merged).toHaveLength(1);

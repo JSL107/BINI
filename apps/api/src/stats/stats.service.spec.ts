@@ -63,7 +63,12 @@ describe('StatsService.getStats', () => {
         cronRuns,
       ]);
     const $queryRaw = jest.fn().mockResolvedValue(weeklyTrendRows);
-    const prisma = { job, cronRun, $transaction, $queryRaw } as unknown as PrismaService;
+    const prisma = {
+      job,
+      cronRun,
+      $transaction,
+      $queryRaw,
+    } as unknown as PrismaService;
     return { service: new StatsService(prisma), $transaction, $queryRaw };
   }
 
@@ -110,7 +115,9 @@ describe('StatsService.getStats', () => {
   });
 
   it('lastCronRunAt은 ISO 문자열로 반환', async () => {
-    const { service } = build({ lastCronRow: { lastSeenAt: new Date('2026-05-23T10:00:00Z') } });
+    const { service } = build({
+      lastCronRow: { lastSeenAt: new Date('2026-05-23T10:00:00Z') },
+    });
     const stats = await service.getStats();
     expect(stats.lastCronRunAt).toBe('2026-05-23T10:00:00.000Z');
   });

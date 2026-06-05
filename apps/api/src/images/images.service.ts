@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { GameImageResponse, ImageQueryType, ImageStatus } from '@bini/types';
+import type {
+  GameImageResponse,
+  ImageQueryType,
+  ImageStatus,
+} from '@bini/types';
 import { GameImageService } from '../image/game-image.service';
 import { GoogleImageService } from '../image/google-image.service';
 import type {
@@ -72,7 +76,9 @@ export class ImagesService {
     }
 
     // 동시 요청 dedup 키에는 verifyText까지 포함 — 같은 query/다른 verify는 결과가 다를 수 있음.
-    const inflightKey = options?.verifyText ? `${query}::v=${options.verifyText}` : query;
+    const inflightKey = options?.verifyText
+      ? `${query}::v=${options.verifyText}`
+      : query;
     const existing = this.inflight.get(inflightKey);
     if (existing) return existing;
 

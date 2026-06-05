@@ -24,7 +24,9 @@ describe('parseIncruitList', () => {
     expect(first.sourceId).toBe('2605180002537');
     expect(first.title).toBe('UI/UX 웹디자인 퍼블리셔 과정 교육생 모집');
     expect(first.company).toBe('(재)부산디자인진흥원');
-    expect(first.detailUrl).toBe('https://job.incruit.com/jobdb_info/jobpost.asp?job=2605180002537');
+    expect(first.detailUrl).toBe(
+      'https://job.incruit.com/jobdb_info/jobpost.asp?job=2605180002537',
+    );
     expect(first.companyUrl).toBe('https://www.incruit.com/company/1664613848');
     expect(first.deadline).toBe('~06.26 (금)');
     expect(first.registeredAtText).toBe('(4일전 수정)');

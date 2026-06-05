@@ -69,11 +69,11 @@ function isSafeHostname(hostname: string): boolean {
   const v4 = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
   if (v4) {
     const [a, b] = v4.slice(1).map(Number);
-    if (a === 10) return false;                          // 10.0.0.0/8
-    if (a === 127) return false;                         // 127.0.0.0/8 loopback
-    if (a === 169 && b === 254) return false;            // 169.254.0.0/16 link-local
-    if (a === 172 && b >= 16 && b <= 31) return false;  // 172.16.0.0/12
-    if (a === 192 && b === 168) return false;            // 192.168.0.0/16
+    if (a === 10) return false; // 10.0.0.0/8
+    if (a === 127) return false; // 127.0.0.0/8 loopback
+    if (a === 169 && b === 254) return false; // 169.254.0.0/16 link-local
+    if (a === 172 && b >= 16 && b <= 31) return false; // 172.16.0.0/12
+    if (a === 192 && b === 168) return false; // 192.168.0.0/16
     return true;
   }
   // IPv6 bracketed literal (e.g. [::1], [fc00::1])
@@ -89,7 +89,8 @@ function isSafeHostname(hostname: string): boolean {
 @Injectable()
 export class CompaniesService {
   private readonly logger = new Logger(CompaniesService.name);
-  private cached: { response: CareerSitesResponse; expiresAt: number } | null = null;
+  private cached: { response: CareerSitesResponse; expiresAt: number } | null =
+    null;
   private readonly extraSites: readonly CareerSiteLink[];
 
   constructor(private readonly prisma: PrismaService) {
@@ -97,7 +98,9 @@ export class CompaniesService {
       ? Object.freeze(parseCareerSitesMarkdown(EXTRA_MARKDOWN))
       : [];
     if (this.extraSites.length === 0 && EXTRA_MARKDOWN === '') {
-      this.logger.warn(`extra-career-sites.md 로드 실패 — upstream만 사용 (path: ${EXTRA_MD_PATH})`);
+      this.logger.warn(
+        `extra-career-sites.md 로드 실패 — upstream만 사용 (path: ${EXTRA_MD_PATH})`,
+      );
     } else {
       this.logger.log(`extra-career-sites 로드: ${this.extraSites.length}건`);
     }
@@ -111,7 +114,9 @@ export class CompaniesService {
    * - 만료 잡도 포함 (사용자가 직접 조회한 경우 과거 잡 조회 가치 있음).
    * - 회사 메타데이터는 잡들의 enrichment 결과 합집합으로 합성.
    */
-  async getCompanyByName(rawName: string): Promise<CompanyDetailResponse | null> {
+  async getCompanyByName(
+    rawName: string,
+  ): Promise<CompanyDetailResponse | null> {
     const name = rawName.trim();
     if (!name) return null;
     const rows = await this.prisma.job.findMany({
@@ -166,7 +171,8 @@ export class CompaniesService {
 
     // externalCareerUrl: 첫 비-empty companyUrl
     const externalCareerUrl =
-      rows.find((r) => r.companyUrl && r.companyUrl.length > 0)?.companyUrl ?? null;
+      rows.find((r) => r.companyUrl && r.companyUrl.length > 0)?.companyUrl ??
+      null;
 
     // 잡플래닛 평판 캐시 — crawler가 채워두면 회사 페이지 우측 카드로 노출.
     // status='found' + rating 채워진 경우만 의미 있음.
@@ -287,9 +293,13 @@ export class CompaniesService {
     const alive = sites.filter((_, i) => flags[i]);
     const dead = sites.length - alive.length;
     if (dead > 0) {
-      const deadList = sites.filter((_, i) => !flags[i]).map((s) => `${s.name}=${s.url}`);
+      const deadList = sites
+        .filter((_, i) => !flags[i])
+        .map((s) => `${s.name}=${s.url}`);
       this.logger.debug(`dead URLs: ${deadList.join(', ')}`);
-      this.logger.log(`Career sites dead filter: ${dead}건 제외, ${alive.length}건 유지`);
+      this.logger.log(
+        `Career sites dead filter: ${dead}건 제외, ${alive.length}건 유지`,
+      );
     }
     return [...alive];
   }
@@ -322,7 +332,10 @@ export class CompaniesService {
         if (!loc) return false;
         try {
           const next = new URL(loc, normalized);
-          if (next.hostname === u.hostname || next.hostname === 'www.' + u.hostname) {
+          if (
+            next.hostname === u.hostname ||
+            next.hostname === 'www.' + u.hostname
+          ) {
             const p = next.pathname.toLowerCase();
             const isMain =
               p === '' ||

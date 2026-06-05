@@ -47,7 +47,9 @@ export class IncruitDetailService {
       const html = await res.text();
       return parseIncruitDetail(html);
     } catch (err) {
-      this.logger.warn(`incruit detail fetch error for job=${jobId}: ${String(err)}`);
+      this.logger.warn(
+        `incruit detail fetch error for job=${jobId}: ${String(err)}`,
+      );
       return EMPTY;
     }
   }
@@ -57,7 +59,8 @@ function abs(src: string | undefined | null): string | null {
   if (!src) return null;
   const cleaned = src.replace(/\\/g, '/');
   if (cleaned.startsWith('//')) return 'https:' + cleaned;
-  if (cleaned.startsWith('http://')) return 'https://' + cleaned.slice('http://'.length);
+  if (cleaned.startsWith('http://'))
+    return 'https://' + cleaned.slice('http://'.length);
   if (cleaned.startsWith('https://')) return cleaned;
   return null; // 인크루트는 prefix 없는 상대 경로를 직접 사용 안 함.
 }

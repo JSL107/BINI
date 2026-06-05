@@ -23,7 +23,9 @@ export function parseJobkoreaList(html: string): RawJob[] {
     const card = $(el);
 
     // 첫 a (CompanyLogo)의 href에서 sourceId 추출
-    const logoAnchor = card.find('a[data-sentry-component="CompanyLogo"]').first();
+    const logoAnchor = card
+      .find('a[data-sentry-component="CompanyLogo"]')
+      .first();
     const detailHref = logoAnchor.attr('href') ?? '';
     const idMatch = detailHref.match(/GI_Read\/(\d+)/);
     if (!idMatch) return;

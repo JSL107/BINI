@@ -24,7 +24,9 @@ describe('parseFirstImageUrl', () => {
   });
 
   it('이미지가 없으면 null을 반환한다', () => {
-    expect(parseFirstImageUrl('<html><body>no images</body></html>')).toBeNull();
+    expect(
+      parseFirstImageUrl('<html><body>no images</body></html>'),
+    ).toBeNull();
   });
 });
 
@@ -107,16 +109,24 @@ describe('findVerifiedImageUrl', () => {
       if (title === undefined) {
         return new Response('not found', { status: 404 });
       }
-      return new Response(`<html><head><title>${title}</title></head><body></body></html>`, {
-        status: 200,
-      });
+      return new Response(
+        `<html><head><title>${title}</title></head><body></body></html>`,
+        {
+          status: 200,
+        },
+      );
     }) as unknown as typeof fetch;
   }
 
   it('출처 페이지 title에 verifyText가 있으면 첫 후보 채택', async () => {
     mockFetchTitle({ 'https://p1.example.com/x': '나이트 크로우 공식 페이지' });
     const got = await findVerifiedImageUrl(
-      [{ imageUrl: 'https://i.example.com/a.jpg', pageUrl: 'https://p1.example.com/x' }],
+      [
+        {
+          imageUrl: 'https://i.example.com/a.jpg',
+          pageUrl: 'https://p1.example.com/x',
+        },
+      ],
       '나이트 크로우',
     );
     expect(got).toBe('https://i.example.com/a.jpg');
@@ -129,8 +139,14 @@ describe('findVerifiedImageUrl', () => {
     });
     const got = await findVerifiedImageUrl(
       [
-        { imageUrl: 'https://i.example.com/a.jpg', pageUrl: 'https://p1.example.com/x' },
-        { imageUrl: 'https://i.example.com/b.jpg', pageUrl: 'https://p2.example.com/y' },
+        {
+          imageUrl: 'https://i.example.com/a.jpg',
+          pageUrl: 'https://p1.example.com/x',
+        },
+        {
+          imageUrl: 'https://i.example.com/b.jpg',
+          pageUrl: 'https://p2.example.com/y',
+        },
       ],
       '나이트 크로우',
     );
@@ -150,7 +166,12 @@ describe('findVerifiedImageUrl', () => {
       'https://p1.example.com/x': '관련 없는 페이지',
     });
     const got = await findVerifiedImageUrl(
-      [{ imageUrl: 'https://i.example.com/a.jpg', pageUrl: 'https://p1.example.com/x' }],
+      [
+        {
+          imageUrl: 'https://i.example.com/a.jpg',
+          pageUrl: 'https://p1.example.com/x',
+        },
+      ],
       '나이트 크로우',
     );
     expect(got).toBeNull();

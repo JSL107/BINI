@@ -33,7 +33,8 @@ function abs(src: string | undefined | null): string | null {
   if (!src) return null;
   const cleaned = src.replace(/\\/g, '/');
   if (cleaned.startsWith('//')) return 'https:' + cleaned;
-  if (cleaned.startsWith('http://')) return 'https://' + cleaned.slice('http://'.length);
+  if (cleaned.startsWith('http://'))
+    return 'https://' + cleaned.slice('http://'.length);
   if (cleaned.startsWith('https://')) return cleaned;
   if (cleaned.startsWith('/')) return BASE + cleaned;
   return null;
@@ -107,7 +108,11 @@ export function parseJobBodyImages(html: string): string[] {
     const url = abs($(el).attr('src'));
     if (!url) return;
     // Skip analytics/tracker pixels.
-    if (/(googletagmanager|google-analytics|doubleclick|gtag|gtm\.|criteo)/i.test(url)) {
+    if (
+      /(googletagmanager|google-analytics|doubleclick|gtag|gtm\.|criteo)/i.test(
+        url,
+      )
+    ) {
       return;
     }
     const looksLikeImage =

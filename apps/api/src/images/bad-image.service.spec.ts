@@ -17,19 +17,21 @@ function build() {
  */
 function buildSharedDb() {
   const reported: string[] = [];
-  const findMany = jest.fn().mockImplementation((args: {
-    where: { imageUrl: { in: string[] } };
-  }) =>
-    Promise.resolve(
-      reported
-        .filter((u) => args.where.imageUrl.in.includes(u))
-        .map((u) => ({ imageUrl: u })),
-    ),
-  );
-  const create = jest.fn().mockImplementation((args: { data: { imageUrl: string } }) => {
-    reported.push(args.data.imageUrl);
-    return Promise.resolve({});
-  });
+  const findMany = jest
+    .fn()
+    .mockImplementation((args: { where: { imageUrl: { in: string[] } } }) =>
+      Promise.resolve(
+        reported
+          .filter((u) => args.where.imageUrl.in.includes(u))
+          .map((u) => ({ imageUrl: u })),
+      ),
+    );
+  const create = jest
+    .fn()
+    .mockImplementation((args: { data: { imageUrl: string } }) => {
+      reported.push(args.data.imageUrl);
+      return Promise.resolve({});
+    });
   const prisma = {
     badImageReport: { findMany, create },
   } as unknown as PrismaService;
@@ -58,7 +60,11 @@ describe('BadImageService', () => {
     it('신고된 URL만 Set에 포함시킨다', async () => {
       const { service, findMany } = build();
       findMany.mockResolvedValueOnce([{ imageUrl: 'https://b/x' }]);
-      const out = await service.findBlocked(['https://a/x', 'https://b/x', 'https://c/x']);
+      const out = await service.findBlocked([
+        'https://a/x',
+        'https://b/x',
+        'https://c/x',
+      ]);
       expect([...out]).toEqual(['https://b/x']);
     });
   });

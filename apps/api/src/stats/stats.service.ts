@@ -9,7 +9,13 @@ import type {
 } from '@bini/types';
 import { PrismaService } from '../prisma/prisma.service';
 
-const ALL_SOURCES: JobSource[] = ['gamejob', 'wanted', 'jobkorea', 'saramin', 'incruit'];
+const ALL_SOURCES: JobSource[] = [
+  'gamejob',
+  'wanted',
+  'jobkorea',
+  'saramin',
+  'incruit',
+];
 const WEEKLY_TREND_WEEKS = 12;
 const TOP_COMPANIES_LIMIT = 20;
 /** /api/stats 응답에 포함할 최근 cron 실행 이력 상한. */
@@ -106,7 +112,9 @@ export class StatsService {
       startedAt: r.startedAt.toISOString(),
       finishedAt: r.finishedAt ? r.finishedAt.toISOString() : null,
       // 알려지지 않은 status 값은 'crashed'로 폴백 — 신호 보존(이상 상태로 노출).
-      status: (CRON_STATUSES.has(r.status) ? r.status : 'crashed') as CronRunStatus,
+      status: (CRON_STATUSES.has(r.status)
+        ? r.status
+        : 'crashed') as CronRunStatus,
       pagesProcessed: r.pagesProcessed,
       scrapedTotal: r.scrapedTotal,
       dedupedTotal: r.dedupedTotal,
@@ -174,7 +182,10 @@ function sourceCountsFrom(
     incruit: 0,
   };
   if (!Array.isArray(rows)) return counts;
-  for (const row of rows as Array<{ source: string; _count: { _all: number } }>) {
+  for (const row of rows as Array<{
+    source: string;
+    _count: { _all: number };
+  }>) {
     if ((ALL_SOURCES as readonly string[]).includes(row.source)) {
       counts[row.source as JobSource] = row._count._all;
     }

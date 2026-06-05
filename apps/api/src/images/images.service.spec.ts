@@ -9,8 +9,12 @@ describe('ImagesService', () => {
     const findUnique = jest.fn().mockResolvedValue(null);
     const upsert = jest.fn().mockResolvedValue(undefined);
     const search = jest.fn();
-    const googleSearch = jest.fn().mockResolvedValue({ imageUrl: null, status: 'not_found' });
-    const prisma = { gameImage: { findUnique, upsert } } as unknown as PrismaService;
+    const googleSearch = jest
+      .fn()
+      .mockResolvedValue({ imageUrl: null, status: 'not_found' });
+    const prisma = {
+      gameImage: { findUnique, upsert },
+    } as unknown as PrismaService;
     const provider = { search, source: 'naver' } as unknown as GameImageService;
     const googleApi = {
       search: googleSearch,
@@ -20,8 +24,9 @@ describe('ImagesService', () => {
     const badImage = {
       findBlocked: jest
         .fn()
-        .mockImplementation(async (urls: readonly string[]) =>
-          new Set(urls.filter((u) => blockedSet.has(u))),
+        .mockImplementation(
+          async (urls: readonly string[]) =>
+            new Set(urls.filter((u) => blockedSet.has(u))),
         ),
     } as unknown as BadImageService;
     return {
@@ -37,20 +42,27 @@ describe('ImagesService', () => {
   it('DB 캐시 히트 시 스크래핑하지 않는다', async () => {
     const { service, findUnique, search } = build();
     findUnique.mockResolvedValue({
-      query: '원신 게임', queryType: 'game',
-      imageUrl: 'https://img/cached.jpg', status: 'found',
+      query: '원신 게임',
+      queryType: 'game',
+      imageUrl: 'https://img/cached.jpg',
+      status: 'found',
     });
     const result = await service.resolve('원신 게임', 'game');
     expect(search).not.toHaveBeenCalled();
     expect(result).toEqual({
-      query: '원신 게임', imageUrl: 'https://img/cached.jpg', status: 'found',
+      query: '원신 게임',
+      imageUrl: 'https://img/cached.jpg',
+      status: 'found',
     });
   });
 
   it('알 수 없는 캐시 status는 not_found로 보정한다', async () => {
     const { service, findUnique } = build();
     findUnique.mockResolvedValue({
-      query: 'x', queryType: 'game', imageUrl: null, status: '이상한값',
+      query: 'x',
+      queryType: 'game',
+      imageUrl: null,
+      status: '이상한값',
     });
     const result = await service.resolve('x', 'game');
     expect(result.status).toBe('not_found');
@@ -58,7 +70,10 @@ describe('ImagesService', () => {
 
   it('캐시 미스 시 스크래핑 후 결과를 저장한다', async () => {
     const { service, upsert, search } = build();
-    search.mockResolvedValue({ imageUrl: 'https://img/new.jpg', status: 'found' });
+    search.mockResolvedValue({
+      imageUrl: 'https://img/new.jpg',
+      status: 'found',
+    });
     const result = await service.resolve('블루아카이브 게임', 'game');
     expect(search).toHaveBeenCalledWith('블루아카이브 게임', undefined);
     expect(upsert).toHaveBeenCalledTimes(1);
@@ -91,7 +106,11 @@ describe('ImagesService', () => {
   it('같은 검색어 동시 요청은 한 번만 스크래핑한다', async () => {
     const { service, search } = build();
     let resolveSearch!: (v: unknown) => void;
-    search.mockReturnValue(new Promise((r) => { resolveSearch = r; }));
+    search.mockReturnValue(
+      new Promise((r) => {
+        resolveSearch = r;
+      }),
+    );
     const p1 = service.resolve('동시 게임', 'game');
     const p2 = service.resolve('동시 게임', 'game');
     await Promise.resolve();
@@ -107,7 +126,9 @@ describe('ImagesService', () => {
    */
   describe('사용자 신고 차단', () => {
     it('캐시 히트 url이 신고된 상태면 imageUrl을 비우고 not_found로 깎는다', async () => {
-      const { service, findUnique } = build(new Set(['https://img/cached.jpg']));
+      const { service, findUnique } = build(
+        new Set(['https://img/cached.jpg']),
+      );
       findUnique.mockResolvedValue({
         query: '신고된 게임',
         queryType: 'game',
@@ -123,8 +144,13 @@ describe('ImagesService', () => {
     });
 
     it('새로 fetch한 url이 신고된 상태면 캐시는 저장하되 응답은 차단한다', async () => {
-      const { service, search, upsert } = build(new Set(['https://img/new.jpg']));
-      search.mockResolvedValue({ imageUrl: 'https://img/new.jpg', status: 'found' });
+      const { service, search, upsert } = build(
+        new Set(['https://img/new.jpg']),
+      );
+      search.mockResolvedValue({
+        imageUrl: 'https://img/new.jpg',
+        status: 'found',
+      });
       const result = await service.resolve('새 게임', 'game');
       expect(upsert).toHaveBeenCalledTimes(1); // 캐시는 저장 (다음 크론에서 재해석)
       expect(result).toEqual({

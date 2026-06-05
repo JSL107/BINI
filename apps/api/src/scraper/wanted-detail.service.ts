@@ -110,7 +110,9 @@ export class WantedDetailService {
         bodyImages,
       };
     } catch (err) {
-      this.logger.warn(`wanted detail fetch error for id=${jobId}: ${String(err)}`);
+      this.logger.warn(
+        `wanted detail fetch error for id=${jobId}: ${String(err)}`,
+      );
       return EMPTY;
     }
   }

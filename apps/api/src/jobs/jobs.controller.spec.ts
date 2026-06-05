@@ -6,9 +6,11 @@ describe('JobsController', () => {
     const getJobsFromDb = getJobsFromDbImpl
       ? jest.fn(getJobsFromDbImpl)
       : jest.fn().mockResolvedValue({ page: 1, totalPages: 5, jobs: [] });
-    const getCalendar = jest
-      .fn()
-      .mockResolvedValue({ startDate: '2026-05-27', endDate: '2026-06-23', days: [] });
+    const getCalendar = jest.fn().mockResolvedValue({
+      startDate: '2026-05-27',
+      endDate: '2026-06-23',
+      days: [],
+    });
     const getNewSinceCount = jest.fn().mockResolvedValue(0);
     const service = {
       getJobsFromDb,
@@ -101,7 +103,13 @@ describe('JobsController', () => {
 
   it('location 다중 + 알려진 시도만 통과', async () => {
     const { controller, getJobsFromDb } = build();
-    await controller.getJobs('1', undefined, undefined, undefined, '서울,도쿄,경기');
+    await controller.getJobs(
+      '1',
+      undefined,
+      undefined,
+      undefined,
+      '서울,도쿄,경기',
+    );
     expect(getJobsFromDb).toHaveBeenCalledWith(1, undefined, {
       ...emptyOpts,
       location: ['서울', '경기'],
@@ -110,7 +118,14 @@ describe('JobsController', () => {
 
   it("remote='true'만 true로", async () => {
     const { controller, getJobsFromDb } = build();
-    await controller.getJobs('1', undefined, undefined, undefined, undefined, 'true');
+    await controller.getJobs(
+      '1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'true',
+    );
     expect(getJobsFromDb).toHaveBeenCalledWith(1, undefined, {
       ...emptyOpts,
       remote: true,
@@ -119,7 +134,14 @@ describe('JobsController', () => {
 
   it("remote가 'true' 외 값이면 false로 본다", async () => {
     const { controller, getJobsFromDb } = build();
-    await controller.getJobs('1', undefined, undefined, undefined, undefined, '1');
+    await controller.getJobs(
+      '1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '1',
+    );
     expect(getJobsFromDb).toHaveBeenCalledWith(1, undefined, emptyOpts);
   });
 
@@ -281,7 +303,9 @@ describe('JobsController', () => {
 
     it('너무 먼 과거(180일+)는 폴백', async () => {
       const { controller, getNewSinceCount } = build();
-      const old = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+      const old = new Date(
+        Date.now() - 365 * 24 * 60 * 60 * 1000,
+      ).toISOString();
       const before = Date.now();
       await controller.getNewSince(old);
       const arg = getNewSinceCount.mock.calls[0][0] as Date;

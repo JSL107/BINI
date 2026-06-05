@@ -77,9 +77,13 @@ export class JobsController {
    * weeks는 1~12 사이의 정수만 허용. 누락/비정규는 기본 4로.
    */
   @Get('calendar')
-  async getCalendar(@Query('weeks') weeks?: string | string[]): Promise<CalendarResponse> {
+  async getCalendar(
+    @Query('weeks') weeks?: string | string[],
+  ): Promise<CalendarResponse> {
     const raw = Array.isArray(weeks) ? weeks[0] : weeks;
-    const parsed = /^\d+$/.test((raw ?? '').trim()) ? parseInt(raw as string, 10) : NaN;
+    const parsed = /^\d+$/.test((raw ?? '').trim())
+      ? parseInt(raw as string, 10)
+      : NaN;
     const clamped = Number.isNaN(parsed)
       ? CALENDAR_DEFAULT_WEEKS
       : Math.max(CALENDAR_MIN_WEEKS, Math.min(parsed, CALENDAR_MAX_WEEKS));

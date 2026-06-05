@@ -18,13 +18,17 @@ describe('createLimiter', () => {
 
   it('각 작업의 반환값을 전달한다', async () => {
     const limit = createLimiter(2);
-    const results = await Promise.all([1, 2, 3].map((n) => limit(async () => n * 2)));
+    const results = await Promise.all(
+      [1, 2, 3].map((n) => limit(async () => n * 2)),
+    );
     expect(results).toEqual([2, 4, 6]);
   });
 
   it('실패(reject)한 작업도 슬롯을 반환해 다음 작업이 진행된다', async () => {
     const limit = createLimiter(1);
-    await expect(limit(() => Promise.reject(new Error('fail')))).rejects.toThrow('fail');
+    await expect(
+      limit(() => Promise.reject(new Error('fail'))),
+    ).rejects.toThrow('fail');
     await expect(limit(async () => 42)).resolves.toBe(42);
   });
 

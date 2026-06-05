@@ -7,7 +7,8 @@ import type { JobScraper } from './scraper.interface';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const CATEGORY_URL = 'https://job.incruit.com/jobdb_list/searchjob.asp?ct=1&ty=3&cd=12690';
+const CATEGORY_URL =
+  'https://job.incruit.com/jobdb_list/searchjob.asp?ct=1&ty=3&cd=12690';
 
 @Injectable()
 export class IncruitScraperService implements JobScraper {
@@ -22,7 +23,7 @@ export class IncruitScraperService implements JobScraper {
       res = await fetch(url, {
         headers: {
           'User-Agent': USER_AGENT,
-          'Accept': 'text/html,application/xhtml+xml',
+          Accept: 'text/html,application/xhtml+xml',
           'Accept-Language': 'ko-KR,ko;q=0.9',
         },
         signal: AbortSignal.timeout(15_000),
