@@ -35,12 +35,18 @@ import {
   toJobDto,
 } from './job-dto';
 import type { JobsQuery } from './job-dto';
+import { ThumbnailService } from './thumbnail.service';
 
 // 외부 모듈(controller/companies/script)이 기존 import 경로를 깨지 않도록 재-export.
 export type { JobsQuery } from './job-dto';
 export { buildJobsOrderBy, buildJobsWhere, computeExpired, toJobDto } from './job-dto';
 
 const DEFAULT_PER_PAGE = 50;
+/**
+ * SSR 시드용 priority 카드 수 — web의 JobsGridWithFilter `priority={i<3}`과 일치.
+ * 첫 페이지의 이 개수만큼만 썸네일을 외부 호출 0번으로 resolve해 thumbnailUrl에 주입.
+ */
+const PRIORITY_THUMBNAIL_LIMIT = 3;
 /** detail 재스크래핑 stale 기준. detailScrapedAt이 이 값보다 오래된 잡 또는 null인 잡을 대상으로. */
 const DEFAULT_DETAIL_STALE_MS = 24 * 60 * 60 * 1000;
 /** 한 cron 사이클에서 detail 재스크래핑할 최대 잡 수 (게임잡 burst 보호 + 워크플로우 시간 캡). */
@@ -90,6 +96,7 @@ export class JobsCronService {
     private readonly wantedDetail: WantedDetailService,
     private readonly jobkoreaDetail: JobkoreaDetailService,
     private readonly incruitDetail: IncruitDetailService,
+    private readonly thumbnails: ThumbnailService,
   ) {
     this.scrapers = [gamejob, wanted, jobkorea, saramin, incruit];
     this.detailFetchers = {
@@ -311,6 +318,27 @@ export class JobsCronService {
       });
     }
 
+    // priority 카드 썸네일 — page 1의 첫 PRIORITY_THUMBNAIL_LIMIT개만, 외부 호출 0
+    // (캐시/row lookup). 실패해도 목록 응답을 깨뜨리지 않는다(빈 맵 폴백) — 썸네일은
+    // SSR 시드용 부가 기능이고, 미스 시 클라이언트가 기존 lazy fetch로 채운다.
+    let thumbnailByJobId = new Map<string, string>();
+    if (page === 1 && rows.length > 0) {
+      try {
+        thumbnailByJobId = await this.thumbnails.resolveCachedThumbnails(
+          rows.slice(0, PRIORITY_THUMBNAIL_LIMIT).map((row) => ({
+            id: row.id,
+            bodyImages: row.bodyImages ?? [],
+            representativeGames: row.representativeGames ?? [],
+            company: row.company,
+            imageQuery: row.imageQuery,
+            imageQueryType: row.imageQueryType,
+          })),
+        );
+      } catch {
+        thumbnailByJobId = new Map();
+      }
+    }
+
     const jobs = rows.map((row) =>
       toJobDto(
         row,
@@ -319,6 +347,7 @@ export class JobsCronService {
           detailUrl: a.detailUrl,
         })),
         jpByCompany.get(row.company) ?? null,
+        thumbnailByJobId.get(row.id) ?? null,
       ),
     );
     return { page, totalPages, jobs };

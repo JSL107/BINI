@@ -205,6 +205,7 @@ export function toJobDto(
   },
   alternateSources: Job['alternateSources'] = [],
   jobplanet: JobplanetSummary | null = null,
+  thumbnailUrl: string | null = null,
 ): Job {
   const imageQueryType: Job['imageQueryType'] =
     row.imageQueryType === 'game' ? 'game' : 'company';
@@ -233,5 +234,6 @@ export function toJobDto(
     locations: row.locations ?? [],
     isRemote: row.isRemote ?? false,
     jobplanet,
+    thumbnailUrl,
   };
 }
