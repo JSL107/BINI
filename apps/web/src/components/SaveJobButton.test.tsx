@@ -30,6 +30,7 @@ const baseJob: Job = {
   employmentType: null,
   locations: [],
   isRemote: false,
+  thumbnailUrl: null,
 };
 
 describe('SaveJobButton', () => {

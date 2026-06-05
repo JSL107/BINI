@@ -58,6 +58,13 @@ export interface Job {
    * 카드에서 별점 뱃지 표시용. 자세한 리뷰는 url로 이동.
    */
   jobplanet: JobplanetSummary | null;
+  /**
+   * 서버가 외부 호출 없이 캐시/row에서 즉시 뽑은 대표 이미지 1장 (SSR 시드용).
+   * page===1의 priority 카드(첫 3개)에만 채워지고, 그 외에는 항상 null.
+   * 클라이언트(JobImageCarousel)가 첫 프레임을 즉시 렌더해 Speed Index를 줄인다.
+   * 무거운 enrichment(스크래핑/Naver 검색)는 타지 않으며, 미스 시 null + 기존 lazy fetch 폴백.
+   */
+  thumbnailUrl: string | null;
 }
 
 export interface JobsResponse {

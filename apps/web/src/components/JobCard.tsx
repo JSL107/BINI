@@ -106,6 +106,7 @@ export function JobCard({
           fallbackType={job.imageQueryType}
           alt={job.title}
           priority={priority}
+          initialThumbnail={job.thumbnailUrl ?? undefined}
         />
         {/* 스크랩(별) 버튼 — 이미지 좌측 상단. 우측 상단의 "본적있음" 뱃지와 안 겹친다. */}
         <SaveJobButton job={job} />

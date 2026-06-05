@@ -9,6 +9,7 @@ import { SaraminScraperService } from '../scraper/saramin-scraper.service';
 import { IncruitScraperService } from '../scraper/incruit-scraper.service';
 import { IncruitDetailService } from '../scraper/incruit-detail.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ThumbnailService } from './thumbnail.service';
 
 interface JobRow {
   id: string;
@@ -102,6 +103,7 @@ function build(seed: JobRow[]) {
     wantedDetail,
     jobkoreaDetail,
     incruitDetail,
+    stub as ThumbnailService,
   );
   return {
     service,
