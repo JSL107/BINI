@@ -11,7 +11,9 @@ describe('parseJobDetail', () => {
   it('회사 로고 URL을 절대 https로 추출한다', () => {
     const r = parseJobDetail(html);
     expect(r.companyLogoUrl).toBeTruthy();
-    expect(r.companyLogoUrl).toMatch(/^https:\/\/file\.gamejob\.co\.kr\/.*CoImage\/LogoView/);
+    expect(r.companyLogoUrl).toMatch(
+      /^https:\/\/file\.gamejob\.co\.kr\/.*CoImage\/LogoView/,
+    );
   });
 
   it('회사 사진 4장을 절대 https로 추출한다', () => {

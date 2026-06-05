@@ -26,9 +26,13 @@ describe('parseSaraminList', () => {
     expect(first.sourceId).toBe('53625619');
     expect(first.title).toBe('[신입/경력] 게임 아트 원화가 모집');
     expect(first.company).toBe('주식회사퍼피띵게임즈');
-    expect(first.detailUrl).toContain('https://www.saramin.co.kr/zf_user/jobs/relay/view');
+    expect(first.detailUrl).toContain(
+      'https://www.saramin.co.kr/zf_user/jobs/relay/view',
+    );
     expect(first.detailUrl).toContain('rec_idx=53625619');
-    expect(first.companyUrl).toContain('https://www.saramin.co.kr/zf_user/company-info/view');
+    expect(first.companyUrl).toContain(
+      'https://www.saramin.co.kr/zf_user/company-info/view',
+    );
     expect(first.deadline).toBe('~ 06/13(토)');
     expect(first.registeredAtText).toBe('등록일 26/04/14');
     // 태그는 지역/경력/학력/형태 + 카테고리 일부

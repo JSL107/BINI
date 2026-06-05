@@ -36,44 +36,68 @@ export const KNOWN_LOCATIONS = [
 ] as const;
 export type KnownLocation = (typeof KNOWN_LOCATIONS)[number];
 
-const REMOTE_KEYWORDS = ['재택', '원격', '리모트', 'remote', 'home office', 'hybrid'];
+const REMOTE_KEYWORDS = [
+  '재택',
+  '원격',
+  '리모트',
+  'remote',
+  'home office',
+  'hybrid',
+];
 
 /** 우선순위 높은 순서대로(senior > mid > junior > newcomer > any) 매칭. */
-const EXPERIENCE_RULES: Array<{ level: ExperienceLevel; patterns: RegExp[] }> = [
-  {
-    level: 'senior',
-    patterns: [
-      /시니어/,
-      /리드/,
-      /수석/,
-      /lead/,
-      /senior/,
-      /경력\s*[5-9]년\s*이상/,
-      /경력\s*1[0-9]년/,
-      /경력\s*[7-9]년/,
-    ],
-  },
-  {
-    level: 'mid',
-    patterns: [/미들/, /중급/, /mid\b/, /경력\s*[3-6]년/, /경력\s*[3-6]~?[3-9]년/],
-  },
-  {
-    level: 'junior',
-    patterns: [/주니어/, /junior/, /경력\s*[1-3]년/, /경력\s*1~?[2-3]년/],
-  },
-  {
-    level: 'newcomer',
-    patterns: [/신입/, /경력무관/, /경력\s*무관/, /무경력/, /신입가능/, /entry.?level/],
-  },
-  {
-    level: 'any',
-    patterns: [/경력자?/, /경력\s*[0-9]+\s*년?\s*이상?/],
-  },
-];
+const EXPERIENCE_RULES: Array<{ level: ExperienceLevel; patterns: RegExp[] }> =
+  [
+    {
+      level: 'senior',
+      patterns: [
+        /시니어/,
+        /리드/,
+        /수석/,
+        /lead/,
+        /senior/,
+        /경력\s*[5-9]년\s*이상/,
+        /경력\s*1[0-9]년/,
+        /경력\s*[7-9]년/,
+      ],
+    },
+    {
+      level: 'mid',
+      patterns: [
+        /미들/,
+        /중급/,
+        /mid\b/,
+        /경력\s*[3-6]년/,
+        /경력\s*[3-6]~?[3-9]년/,
+      ],
+    },
+    {
+      level: 'junior',
+      patterns: [/주니어/, /junior/, /경력\s*[1-3]년/, /경력\s*1~?[2-3]년/],
+    },
+    {
+      level: 'newcomer',
+      patterns: [
+        /신입/,
+        /경력무관/,
+        /경력\s*무관/,
+        /무경력/,
+        /신입가능/,
+        /entry.?level/,
+      ],
+    },
+    {
+      level: 'any',
+      patterns: [/경력자?/, /경력\s*[0-9]+\s*년?\s*이상?/],
+    },
+  ];
 
 const EMPLOYMENT_RULES: Array<{ type: EmploymentType; patterns: RegExp[] }> = [
   { type: 'intern', patterns: [/인턴십/, /인턴/, /intern/] },
-  { type: 'freelance', patterns: [/외주/, /프리랜서/, /아웃소싱/, /freelance/] },
+  {
+    type: 'freelance',
+    patterns: [/외주/, /프리랜서/, /아웃소싱/, /freelance/],
+  },
   { type: 'parttime', patterns: [/파트타임/, /시간제/, /part.?time/] },
   { type: 'contract', patterns: [/계약직/, /기간제/, /계약\b/, /contract/] },
   { type: 'fulltime', patterns: [/정규직/, /정규\b/, /full.?time/] },
@@ -113,7 +137,10 @@ export function extractEmploymentType(
 }
 
 /** tags + title에서 시도 라벨 추출. 다중 지역 가능. dedup + KNOWN_LOCATIONS 순서 보존. */
-export function extractLocations(tags: string[], title: string): KnownLocation[] {
+export function extractLocations(
+  tags: string[],
+  title: string,
+): KnownLocation[] {
   const hay = joinHaystack(tags, title);
   if (!hay) return [];
   const found = new Set<KnownLocation>();
@@ -137,7 +164,10 @@ export interface JobAttributes {
   isRemote: boolean;
 }
 
-export function computeAttributes(tags: string[], title: string): JobAttributes {
+export function computeAttributes(
+  tags: string[],
+  title: string,
+): JobAttributes {
   return {
     experienceLevel: extractExperience(tags, title),
     employmentType: extractEmploymentType(tags, title),
@@ -165,13 +195,17 @@ const EMPLOYMENT_VALUES: ReadonlySet<string> = new Set<EmploymentType>([
 export function parseExperienceQuery(
   raw: string | string[] | undefined,
 ): ExperienceLevel[] {
-  return splitCsv(raw).filter((v): v is ExperienceLevel => EXPERIENCE_VALUES.has(v));
+  return splitCsv(raw).filter((v): v is ExperienceLevel =>
+    EXPERIENCE_VALUES.has(v),
+  );
 }
 
 export function parseEmploymentTypeQuery(
   raw: string | string[] | undefined,
 ): EmploymentType[] {
-  return splitCsv(raw).filter((v): v is EmploymentType => EMPLOYMENT_VALUES.has(v));
+  return splitCsv(raw).filter((v): v is EmploymentType =>
+    EMPLOYMENT_VALUES.has(v),
+  );
 }
 
 export function parseLocationQuery(

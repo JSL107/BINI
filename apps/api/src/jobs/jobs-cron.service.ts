@@ -39,7 +39,12 @@ import { ThumbnailService } from './thumbnail.service';
 
 // 외부 모듈(controller/companies/script)이 기존 import 경로를 깨지 않도록 재-export.
 export type { JobsQuery } from './job-dto';
-export { buildJobsOrderBy, buildJobsWhere, computeExpired, toJobDto } from './job-dto';
+export {
+  buildJobsOrderBy,
+  buildJobsWhere,
+  computeExpired,
+  toJobDto,
+} from './job-dto';
 
 const DEFAULT_PER_PAGE = 50;
 /**
@@ -194,7 +199,8 @@ export class JobsCronService {
       dedupedCount += 1;
       // 새 primary 후보(이번 cron의 group 첫 등장)와 기존 DB primary 중 후자 우선.
       const newPrimaryId = `${group.primary.source}:${group.primary.sourceId}`;
-      const finalPrimaryId = primaryByKey.get(group.normalizedKey) ?? newPrimaryId;
+      const finalPrimaryId =
+        primaryByKey.get(group.normalizedKey) ?? newPrimaryId;
 
       // primary upsert가 항상 alias upsert보다 먼저 실행되도록 순서 조정.
       // 신규 그룹(DB에 같은 키 primary가 없음)에서 첫 member가 finalPrimaryId면 자명히 안전.
@@ -550,18 +556,26 @@ export class JobsCronService {
           where: { id: job.id },
           data: {
             detailScrapedAt: new Date(),
-            ...(detail.companyLogoUrl && { companyLogoUrl: detail.companyLogoUrl }),
-            ...(detail.companyPhotos.length > 0 && { companyPhotos: detail.companyPhotos }),
+            ...(detail.companyLogoUrl && {
+              companyLogoUrl: detail.companyLogoUrl,
+            }),
+            ...(detail.companyPhotos.length > 0 && {
+              companyPhotos: detail.companyPhotos,
+            }),
             ...(detail.representativeGames.length > 0 && {
               representativeGames: detail.representativeGames,
             }),
-            ...(detail.bodyImages.length > 0 && { bodyImages: detail.bodyImages }),
+            ...(detail.bodyImages.length > 0 && {
+              bodyImages: detail.bodyImages,
+            }),
           },
         });
         updated++;
       } catch (err) {
         failed++;
-        this.logger.warn(`rescrape ${job.id} 실패: ${String(err).slice(0, 140)}`);
+        this.logger.warn(
+          `rescrape ${job.id} 실패: ${String(err).slice(0, 140)}`,
+        );
       }
       if (i + 1 < targets.length && sleepMs > 0) {
         await new Promise((r) => setTimeout(r, sleepMs));

@@ -6,7 +6,9 @@ import {
 } from './dedupe';
 import type { RawJob } from '../scraper/raw-job';
 
-function mkJob(over: Partial<RawJob> & { source: RawJob['source']; sourceId: string }): RawJob {
+function mkJob(
+  over: Partial<RawJob> & { source: RawJob['source']; sourceId: string },
+): RawJob {
   return {
     company: over.company ?? '게임듀오',
     companyUrl: '',
@@ -21,8 +23,9 @@ function mkJob(over: Partial<RawJob> & { source: RawJob['source']; sourceId: str
 
 describe('normalizeForDedup', () => {
   it('공백/대괄호/소괄호/기호를 제거하고 lowercase한다', () => {
-    expect(normalizeForDedup('[A]  Test (junior) - Designer'))
-      .toBe('atestjuniordesigner');
+    expect(normalizeForDedup('[A]  Test (junior) - Designer')).toBe(
+      'atestjuniordesigner',
+    );
   });
   it('이미 정규화된 입력은 그대로 lowercase만', () => {
     expect(normalizeForDedup('abc')).toBe('abc');
@@ -49,10 +52,16 @@ describe('dedupeJobs', () => {
 
   it('정규화 대상(공백/대괄호) 차이는 같은 공고로 본다', () => {
     const jobs: RawJob[] = [
-      mkJob({ source: 'gamejob', sourceId: '1',
-              title: '[p.일렌시아] 배경 도트 디자이너' }),
-      mkJob({ source: 'wanted', sourceId: '2',
-              title: 'p.일렌시아 배경 도트 디자이너' }),
+      mkJob({
+        source: 'gamejob',
+        sourceId: '1',
+        title: '[p.일렌시아] 배경 도트 디자이너',
+      }),
+      mkJob({
+        source: 'wanted',
+        sourceId: '2',
+        title: 'p.일렌시아 배경 도트 디자이너',
+      }),
     ];
     expect(dedupeJobs(jobs)).toHaveLength(1);
   });
@@ -83,7 +92,12 @@ describe('dedupeJobs', () => {
 
   it('DedupedJob에 normalizedKey가 채워진다', () => {
     const result = dedupeJobs([
-      mkJob({ source: 'gamejob', sourceId: '1', company: 'A', title: 'Test Title' }),
+      mkJob({
+        source: 'gamejob',
+        sourceId: '1',
+        company: 'A',
+        title: 'Test Title',
+      }),
     ]);
     expect(result[0].normalizedKey).toBe(makeNormalizedKey('A', 'Test Title'));
   });
@@ -123,8 +137,6 @@ describe('groupRawJobs', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].primary).toBe(a);
     expect(groups[0].members).toEqual([a, b]);
-    expect(groups[0].normalizedKey).toBe(
-      makeNormalizedKey(a.company, a.title),
-    );
+    expect(groups[0].normalizedKey).toBe(makeNormalizedKey(a.company, a.title));
   });
 });

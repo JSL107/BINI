@@ -118,10 +118,14 @@ async function main() {
         ),
         { timeout: 30_000 },
       );
-      logger.log(`updated ${Math.min(i + CHUNK, updates.length)}/${updates.length}`);
+      logger.log(
+        `updated ${Math.min(i + CHUNK, updates.length)}/${updates.length}`,
+      );
     }
 
-    logger.log(`backfill 완료. 영속 dedup primary=${groupByKey.size}, alias=${aliasCount}`);
+    logger.log(
+      `backfill 완료. 영속 dedup primary=${groupByKey.size}, alias=${aliasCount}`,
+    );
   } finally {
     await app.close().catch(() => undefined);
   }

@@ -1,7 +1,9 @@
 /** 동시 실행 개수를 max로 제한하는 간단한 세마포어. */
 export function createLimiter(max: number) {
   if (!Number.isInteger(max) || max < 1) {
-    throw new RangeError(`createLimiter: max must be an integer >= 1, got ${max}`);
+    throw new RangeError(
+      `createLimiter: max must be an integer >= 1, got ${max}`,
+    );
   }
   let active = 0;
   const queue: (() => void)[] = [];

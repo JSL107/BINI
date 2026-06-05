@@ -37,7 +37,7 @@ const DOMAIN_BLOCKLIST = [
  * finance 경로인 케이스를 컷한다.
  */
 const PATH_PATTERN_BLOCKLIST: RegExp[] = [
-  /\/imgfinance\//i,    // ssl.pstatic.net/imgfinance/charts/...
+  /\/imgfinance\//i, // ssl.pstatic.net/imgfinance/charts/...
   /\/finance\/chart/i,
   /\/stock\/chart/i,
   /\/securities\//i,

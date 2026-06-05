@@ -65,7 +65,8 @@ export function parseSaraminList(html: string): RawJob[] {
     const companyUrl = absoluteUrl(companyAnchor.attr('href') ?? '');
     if (!company) return;
 
-    const deadline = card.find('div.job_date span.date').first().text().trim() || '상시';
+    const deadline =
+      card.find('div.job_date span.date').first().text().trim() || '상시';
     const registeredAtText = card.find('span.job_day').first().text().trim();
 
     // 태그: job_condition span들 + job_sector 카테고리 (회사 카테고리 1-2개만)

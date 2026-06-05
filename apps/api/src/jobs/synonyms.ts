@@ -19,7 +19,14 @@
  */
 const SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   // 게임 원화/일러스트 직군
-  ['원화', '일러스트', '일러스트레이터', '컨셉아트', '컨셉 아트', 'concept art'],
+  [
+    '원화',
+    '일러스트',
+    '일러스트레이터',
+    '컨셉아트',
+    '컨셉 아트',
+    'concept art',
+  ],
   // 배경
   ['배경', '배경원화', 'background'],
   // 캐릭터

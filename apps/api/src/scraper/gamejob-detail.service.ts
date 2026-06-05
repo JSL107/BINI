@@ -74,7 +74,9 @@ export class GamejobDetailService {
       }
       return parseJobBodyImages(await res.text());
     } catch (err) {
-      this.logger.warn(`body iframe fetch error for gno=${jobId}: ${String(err)}`);
+      this.logger.warn(
+        `body iframe fetch error for gno=${jobId}: ${String(err)}`,
+      );
       return [];
     }
   }

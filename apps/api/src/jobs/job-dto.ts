@@ -154,7 +154,13 @@ export function computeExpired(
 }
 
 function asExperience(v: string | null | undefined): ExperienceLevel | null {
-  if (v === 'newcomer' || v === 'junior' || v === 'mid' || v === 'senior' || v === 'any') {
+  if (
+    v === 'newcomer' ||
+    v === 'junior' ||
+    v === 'mid' ||
+    v === 'senior' ||
+    v === 'any'
+  ) {
     return v;
   }
   return null;

@@ -15,7 +15,9 @@ describe('expandSearchTerms', () => {
 
   it('영문 동의어도 같은 그룹으로 확장', () => {
     const r = expandSearchTerms('animator');
-    expect(r).toEqual(expect.arrayContaining(['animator', 'animation', '애니메이터']));
+    expect(r).toEqual(
+      expect.arrayContaining(['animator', 'animation', '애니메이터']),
+    );
   });
 
   it('대소문자/공백 무관', () => {

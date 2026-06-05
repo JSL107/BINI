@@ -17,7 +17,9 @@ describe('parseJobList', () => {
     expect(first.source).toBe('gamejob');
     expect(first.sourceId).toBe('280518');
     expect(first.company).toBe('㈜원더소프트');
-    expect(first.title).toBe('[경북글로벌게임센터] 원더킹, 세피루스 2D 원화및 도트 구인');
+    expect(first.title).toBe(
+      '[경북글로벌게임센터] 원더킹, 세피루스 2D 원화및 도트 구인',
+    );
     expect(first.detailUrl).toContain('/Recruit/GI_Read/View?GI_No=280518');
     expect(first.companyUrl).toContain('/Company/Detail');
     expect(first.deadline).toBe('상시');

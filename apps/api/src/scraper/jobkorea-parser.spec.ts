@@ -24,7 +24,9 @@ describe('parseJobkoreaList', () => {
     expect(first.sourceId).toMatch(/^\d+$/);
     expect(first.title.length).toBeGreaterThan(0);
     expect(first.company.length).toBeGreaterThan(0);
-    expect(first.detailUrl).toMatch(/^https:\/\/www\.jobkorea\.co\.kr\/Recruit\/GI_Read\/\d+/);
+    expect(first.detailUrl).toMatch(
+      /^https:\/\/www\.jobkorea\.co\.kr\/Recruit\/GI_Read\/\d+/,
+    );
     expect(Array.isArray(first.tags)).toBe(true);
   });
 
@@ -39,6 +41,8 @@ describe('parseJobkoreaTotalPages', () => {
   });
 
   it('페이지네이션이 없으면 1을 반환한다', () => {
-    expect(parseJobkoreaTotalPages('<html><body>no pagination</body></html>')).toBe(1);
+    expect(
+      parseJobkoreaTotalPages('<html><body>no pagination</body></html>'),
+    ).toBe(1);
   });
 });

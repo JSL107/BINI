@@ -73,7 +73,9 @@ async function main() {
         ),
         { timeout: 30_000 },
       );
-      logger.log(`updated ${Math.min(i + CHUNK, updates.length)}/${updates.length}`);
+      logger.log(
+        `updated ${Math.min(i + CHUNK, updates.length)}/${updates.length}`,
+      );
     }
 
     logger.log(`backfill 완료. parsed=${parsedCount} null=${nullCount}`);

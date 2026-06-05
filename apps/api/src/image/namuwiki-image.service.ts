@@ -37,7 +37,8 @@ export class NamuwikiImageService {
     });
     const byName = new Map<string, string>();
     for (const r of rows) {
-      if (r.status === 'found' && r.imageUrl) byName.set(r.gameName, r.imageUrl);
+      if (r.status === 'found' && r.imageUrl)
+        byName.set(r.gameName, r.imageUrl);
     }
     // 원래 입력 순서 보존.
     const out: string[] = [];

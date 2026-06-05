@@ -26,7 +26,7 @@ export class JobkoreaScraperService implements JobScraper {
       res = await fetch(url, {
         headers: {
           'User-Agent': USER_AGENT,
-          'Accept': 'text/html,application/xhtml+xml',
+          Accept: 'text/html,application/xhtml+xml',
           'Accept-Language': 'ko-KR,ko;q=0.9',
         },
         signal: AbortSignal.timeout(15_000),

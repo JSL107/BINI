@@ -29,7 +29,9 @@ describe('extractExperience', () => {
     expect(extractExperience(['시니어'], '원화 디자이너')).toBe('senior');
   });
   it('"리드" → senior', () => {
-    expect(extractExperience(['리드 아티스트'], '원화 디자이너')).toBe('senior');
+    expect(extractExperience(['리드 아티스트'], '원화 디자이너')).toBe(
+      'senior',
+    );
   });
   it('senior 키워드가 우선 (jr+sr 동시 등장)', () => {
     expect(extractExperience(['주니어', '시니어'], '원화')).toBe('senior');
@@ -57,7 +59,9 @@ describe('extractEmploymentType', () => {
     expect(extractEmploymentType(['인턴'], '원화')).toBe('intern');
   });
   it('"프리랜서" → freelance', () => {
-    expect(extractEmploymentType([], '프리랜서 원화 디자이너')).toBe('freelance');
+    expect(extractEmploymentType([], '프리랜서 원화 디자이너')).toBe(
+      'freelance',
+    );
   });
   it('intern이 fulltime/contract보다 우선', () => {
     expect(extractEmploymentType(['정규직', '인턴'], '원화')).toBe('intern');
@@ -80,7 +84,9 @@ describe('extractLocations', () => {
     ]);
   });
   it('중복 등장은 한 번만', () => {
-    expect(extractLocations(['서울', '서울 강남'], '서울 원화')).toEqual(['서울']);
+    expect(extractLocations(['서울', '서울 강남'], '서울 원화')).toEqual([
+      '서울',
+    ]);
   });
   it('알 수 없는 지역은 무시', () => {
     expect(extractLocations(['도쿄'], 'Tokyo 원화')).toEqual([]);

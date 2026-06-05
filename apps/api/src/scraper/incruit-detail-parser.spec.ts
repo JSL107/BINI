@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseIncruitDetail } from './incruit-detail.service';
 
-const html = readFileSync(join(__dirname, '../../test/fixtures/incruit-detail.html'), 'utf-8');
+const html = readFileSync(
+  join(__dirname, '../../test/fixtures/incruit-detail.html'),
+  'utf-8',
+);
 
 describe('parseIncruitDetail', () => {
   it('빈 HTML이면 모두 빈 값', () => {
@@ -24,7 +27,9 @@ describe('parseIncruitDetail', () => {
     `;
     const r = parseIncruitDetail(synthetic);
     expect(r.companyLogoUrl).toBe('https://l.incru.it/2024/01/test-logo.jpg');
-    expect(r.bodyImages).toEqual(['https://c.incru.it/newjobpost/2026/banner/x.png']);
+    expect(r.bodyImages).toEqual([
+      'https://c.incru.it/newjobpost/2026/banner/x.png',
+    ]);
     expect(r.companyPhotos).toEqual([]);
     expect(r.representativeGames).toEqual([]);
   });
