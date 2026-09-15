@@ -98,6 +98,21 @@ export function JobCard({ job }: { job: Job }) {
         >
           {job.title}
         </a>
+        {(job.artSubtypes.length > 0 || job.jobFamilies.length > 0) && (
+          <div data-testid="job-families" className="flex flex-wrap gap-1">
+            {(job.artSubtypes.length > 0
+              ? job.artSubtypes
+              : job.jobFamilies
+            ).map((label) => (
+              <span
+                key={label}
+                className="rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap gap-1">
           {job.tags.map((tag, i) => (
             <span

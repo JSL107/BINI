@@ -76,6 +76,31 @@ describe('JobCard', () => {
     expect(screen.getByText('경기')).toBeInTheDocument();
   });
 
+  it('원화 하위 구분을 배지로 보여준다', () => {
+    render(
+      <JobCard
+        job={{ ...baseJob, jobFamilies: ['원화'], artSubtypes: ['캐릭터'] }}
+      />,
+    );
+    expect(screen.getByText('캐릭터')).toBeInTheDocument();
+  });
+
+  it('하위 구분이 없으면 직군 라벨을 보여준다', () => {
+    render(
+      <JobCard
+        job={{ ...baseJob, jobFamilies: ['모델링'], artSubtypes: [] }}
+      />,
+    );
+    expect(screen.getByText('모델링')).toBeInTheDocument();
+  });
+
+  it('직군이 비어 있으면 배지 줄을 그리지 않는다', () => {
+    const { container } = render(
+      <JobCard job={{ ...baseJob, jobFamilies: [], artSubtypes: [] }} />,
+    );
+    expect(container.querySelector('[data-testid="job-families"]')).toBeNull();
+  });
+
   describe('source badge', () => {
     it('renders the wanted source label', () => {
       const job: Job = { ...baseJob, source: 'wanted' as const };
