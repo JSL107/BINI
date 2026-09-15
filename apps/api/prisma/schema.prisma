@@ -55,6 +55,14 @@ model Job {
   locations       String[] @default([])
   isRemote        Boolean  @default(false)
 
+  /// 게시자가 공고에 단 직군 라벨(게임잡 원문). 예: ["원화","애니메이션"].
+  /// 게임잡 외 소스는 목록에 직군을 주지 않아 빈 배열이다.
+  /// 빈 배열을 "직군 없음"으로 읽어 조회에서 빼면 기존 공고와 타 소스 공고가 통째로
+  /// 사라진다. 조회 계층은 빈 배열을 제외 조건으로 쓰지 않는다.
+  jobFamilies     String[] @default([])
+  /// 원화 하위 구분. 예: ["캐릭터"], ["배경·컨셉"]. 원화 직군이 아니면 빈 배열이다.
+  artSubtypes     String[] @default([])
+
   @@index([registeredAt])
   @@index([deadlineAt])
   @@index([expiredAt])
@@ -64,6 +72,7 @@ model Job {
   @@index([experienceLevel])
   @@index([employmentType])
   @@index([isRemote])
+  @@index([jobFamilies], type: Gin)
   @@map("jobs")
 }
 

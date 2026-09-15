@@ -33,6 +33,8 @@ function mkJob(over: Partial<Job> & { id: string; source: JobSource }): Job {
     employmentType: null,
     locations: [],
     isRemote: false,
+    jobFamilies: [],
+    artSubtypes: [],
     ...over,
   };
 }

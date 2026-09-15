@@ -27,6 +27,23 @@ function extractOnclickTitle(onclick: string): string {
   return '';
 }
 
+/**
+ * onclick 의 GA_Application_Prdt 호출에서 직군 라벨 목록을 뽑는다.
+ *
+ * IsNullOrWhiteSpace(...) 인자는 출현 순서대로 직군 · 장르 · 지역이다.
+ * 위치 인자(6번째 등)는 '없음' / 'Sword 채용관' 처럼 값이 달라져 쉼표로 세면 어긋나므로,
+ * IsNullOrWhiteSpace 출현 순서만 신뢰한다.
+ */
+function extractOnclickJobFamilies(onclick: string): string[] {
+  if (!onclick) return [];
+  const match = onclick.match(/IsNullOrWhiteSpace\('([^']*)'\)/);
+  if (!match) return [];
+  return match[1]
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
 export function parseJobList(html: string): RawJob[] {
   const $ = cheerio.load(html);
   const jobs: RawJob[] = [];
@@ -56,6 +73,7 @@ export function parseJobList(html: string): RawJob[] {
 
     const strongText = detailAnchor.find('strong').text().trim();
     const onclick = detailAnchor.attr('onclick') ?? '';
+    const jobFamilies = extractOnclickJobFamilies(onclick);
     // Fix 1: <strong> text is primary; onclick GA_Application_Prdt 3rd arg is fallback
     const title = strongText || extractOnclickTitle(onclick);
 
@@ -83,6 +101,7 @@ export function parseJobList(html: string): RawJob[] {
       deadline,
       registeredAtText,
       tags,
+      jobFamilies,
     });
   });
 
