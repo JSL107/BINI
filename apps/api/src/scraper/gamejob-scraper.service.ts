@@ -57,9 +57,15 @@ export class GamejobScraperService implements JobScraper {
     }
 
     const jobs = [...merged.values()];
-    // 한 직군이 0건인 것은 정상일 수 있다(공고가 적은 직군). 전부 0건일 때만
-    // 마크업 구조가 바뀐 것으로 본다.
+    // 한 직군이 0건인 것은 정상일 수 있다(공고가 적은 직군). "구조 변경 의심"은
+    // 요청이 전부 성공했는데도 0건일 때만 주장할 수 있는 근거다 — 일부가 실패해서
+    // 표본이 준 경우까지 같은 원인으로 몰면 엉뚱한 곳(파서)을 찾게 만든다.
     if (jobs.length === 0) {
+      if (failed.length > 0) {
+        throw new BadGatewayException(
+          `게임잡 일부 직군 요청 실패(duty: ${failed.join(', ')})로 나머지 직군까지 0건입니다.`,
+        );
+      }
       throw new BadGatewayException(
         '게임잡 공고 파싱 결과가 전 직군 0건입니다 (구조 변경 의심).',
       );
