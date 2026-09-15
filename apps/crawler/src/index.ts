@@ -137,7 +137,9 @@ async function searchNaver(
     },
   ).catch(() => null);
   if (!res || !res.ok) return null;
-  const html = await res.text();
+  // 본문 읽기에도 timeout이 걸린다 — 여기서 throw하면 호출부가 시도 기록(recordMiss)을 건너뛴다.
+  const html = await res.text().catch(() => null);
+  if (html === null) return null;
   // 후보 패턴들을 모두 모아 차단 URL은 skip하고 첫 합격품을 채택.
   // 네이버는 결과 wrapper가 들쭉날쭉해 4가지 패턴 다 시도한다 (모두 같은 결과 페이지 안).
   const patterns = [
