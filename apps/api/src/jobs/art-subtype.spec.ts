@@ -15,9 +15,48 @@ describe('extractArtSubtypes', () => {
     ).toEqual(['배경·컨셉']);
   });
 
-  it('영문 표기도 잡는다', () => {
+  it('영문 표기여도 캐릭터 신호가 있으면 컨셉만으로 배경을 붙이지 않는다', () => {
     expect(
       extractArtSubtypes('[Loonshot Games] Sr. Character Concept Artist', 원화),
+    ).toEqual(['캐릭터']);
+  });
+
+  it('캐릭터 컨셉아티스트는 배경을 붙이지 않는다', () => {
+    expect(
+      extractArtSubtypes(
+        '[NOUGH Studio] P의 거짓 차기작 캐릭터 컨셉아티스트',
+        원화,
+      ),
+    ).toEqual(['캐릭터']);
+  });
+
+  it('캐릭터 컨셉 아티스트도 배경을 붙이지 않는다', () => {
+    expect(
+      extractArtSubtypes('[NC][계약직][AION2] 캐릭터 컨셉 아티스트 모집', 원화),
+    ).toEqual(['캐릭터']);
+  });
+
+  it('캐릭터 컨셉 모집도 배경을 붙이지 않는다', () => {
+    expect(
+      extractArtSubtypes(
+        '[NC][단기계약직][Project JSY] AAA콘솔 액션RPG 프로젝트 캐릭터 컨셉 모집',
+        원화,
+      ),
+    ).toEqual(['캐릭터']);
+  });
+
+  it('캐릭터 신호가 없는 바른 컨셉 아티스트는 배경·컨셉을 붙인다', () => {
+    expect(extractArtSubtypes('[신규 PC/콘솔] 컨셉 아티스트', 원화)).toEqual([
+      '배경·컨셉',
+    ]);
+  });
+
+  it('배경이 명시되면 캐릭터와 함께 있어도 배경·컨셉을 붙인다', () => {
+    expect(
+      extractArtSubtypes(
+        '[프리랜서] 유니티 3D 캐릭터 / 배경 / 애니메이터 / 이펙터 디자이너 모집',
+        원화,
+      ),
     ).toEqual(['캐릭터', '배경·컨셉']);
   });
 
