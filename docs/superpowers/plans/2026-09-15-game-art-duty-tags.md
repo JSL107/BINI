@@ -1236,10 +1236,16 @@ export const JOBKOREA_QUERIES: readonly string[] = [
 ];
 ```
 
-`fetchQuery` 안의 URL 은 기존 그대로 둔다.
+`fetchQuery` 안의 URL 은 기존 그대로 둔다. **검색어 파라미터만 상수에서 인자로 바뀌고, 나머지
+파라미터는 한 글자도 건드리지 않는다** — 특히 `tabType: 'recruit'` 을 빠뜨리면 잡코리아가 다른
+검색 탭을 돌려주는데, 파싱은 조용히 0건이 되어 실패로도 안 잡힌다.
 
 ```typescript
-    const params = new URLSearchParams({ stext: query, Page_No: String(page) });
+    const params = new URLSearchParams({
+      stext: query,
+      tabType: 'recruit',
+      Page_No: String(page),
+    });
     const url = `https://www.jobkorea.co.kr/Search/?${params.toString()}`;
 ```
 
