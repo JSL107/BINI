@@ -53,6 +53,10 @@ export interface Job {
   locations: string[];
   /** tags+title에 재택/원격 키워드가 있으면 true. */
   isRemote: boolean;
+  /** 게시자가 단 직군 라벨. 게임잡만 채운다. 예: ['원화','애니메이션'] */
+  jobFamilies: string[];
+  /** 원화 하위 구분. 예: ['캐릭터'], ['배경·컨셉'] */
+  artSubtypes: string[];
 }
 
 export interface JobsResponse {

@@ -38,6 +38,8 @@ const baseJob: Job = {
   employmentType: null,
   locations: [],
   isRemote: false,
+  jobFamilies: [],
+  artSubtypes: [],
 };
 
 describe('JobCard', () => {

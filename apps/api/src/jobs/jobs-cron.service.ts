@@ -26,6 +26,8 @@ import { groupRawJobs } from './dedupe';
 import { computeAttributes } from './job-attributes';
 import { parseDeadlineToDate } from './deadline-parser';
 import { expandSearchTerms } from './synonyms';
+import { classifyExclusion, countExclusions } from './job-exclusion';
+import { extractArtSubtypes } from './art-subtype';
 
 /** lastSeenAt이 이 값을 넘은 잡은 expired로 간주 (sweepExpired 임계값 + computeExpired 동적 계산 기준). */
 const EXPIRY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -144,7 +146,11 @@ export class JobsCronService {
       };
     }
 
-    const groups = groupRawJobs(allRaw);
+    const exclusionCounts = countExclusions(allRaw.map((j) => j.title));
+    const keptRaw = allRaw.filter((j) => classifyExclusion(j.title) === null);
+    const excludedCount = allRaw.length - keptRaw.length;
+
+    const groups = groupRawJobs(keptRaw);
 
     // 영속화된 primary 조회 — 같은 normalizedKey의 잡이 이미 DB에 primary로 있으면 우선.
     // 단, 만료된 primary는 후보에서 제외 — 새 잡들을 죽은 primary에 묶지 않기 위해.
@@ -189,7 +195,8 @@ export class JobsCronService {
       dedupedCount += 1;
       // 새 primary 후보(이번 cron의 group 첫 등장)와 기존 DB primary 중 후자 우선.
       const newPrimaryId = `${group.primary.source}:${group.primary.sourceId}`;
-      const finalPrimaryId = primaryByKey.get(group.normalizedKey) ?? newPrimaryId;
+      const finalPrimaryId =
+        primaryByKey.get(group.normalizedKey) ?? newPrimaryId;
 
       // primary upsert가 항상 alias upsert보다 먼저 실행되도록 순서 조정.
       // 신규 그룹(DB에 같은 키 primary가 없음)에서 첫 member가 finalPrimaryId면 자명히 안전.
@@ -231,6 +238,8 @@ export class JobsCronService {
           employmentType: attrs.employmentType,
           locations: attrs.locations,
           isRemote: attrs.isRemote,
+          jobFamilies: member.jobFamilies,
+          artSubtypes: extractArtSubtypes(member.title, member.jobFamilies),
         };
         upserts.push(
           this.prisma.job.upsert({
@@ -248,8 +257,14 @@ export class JobsCronService {
       await this.prisma.$transaction(upserts, { timeout: 30_000 });
     }
 
+    const exclusionSummary = Object.entries(exclusionCounts)
+      .filter(([, n]) => n > 0)
+      .map(([rule, n]) => `${rule} ${n}`)
+      .join(', ');
     this.logger.log(
-      `page ${page}: ${allRaw.length}건 raw → ${dedupedCount}건 dedup → ${newCount}건 신규 (upserted ${upserts.length})` +
+      `page ${page}: ${allRaw.length}건 raw → ${excludedCount}건 제외` +
+        (exclusionSummary ? `(${exclusionSummary})` : '') +
+        ` → ${dedupedCount}건 dedup → ${newCount}건 신규 (upserted ${upserts.length})` +
         (failedSources.length ? ` (failed: ${failedSources.join(',')})` : ''),
     );
 
@@ -292,10 +307,13 @@ export class JobsCronService {
     ]);
     const totalPages = Math.max(1, Math.ceil(total / perPage));
     const jobs = rows.map((row) =>
-      toJobDto(row, (row.aliases ?? []).map((a) => ({
-        source: isJobSource(a.source) ? a.source : ('gamejob' as JobSource),
-        detailUrl: a.detailUrl,
-      }))),
+      toJobDto(
+        row,
+        (row.aliases ?? []).map((a) => ({
+          source: isJobSource(a.source) ? a.source : ('gamejob' as JobSource),
+          detailUrl: a.detailUrl,
+        })),
+      ),
     );
     return { page, totalPages, jobs };
   }
@@ -375,18 +393,26 @@ export class JobsCronService {
           where: { id: job.id },
           data: {
             detailScrapedAt: new Date(),
-            ...(detail.companyLogoUrl && { companyLogoUrl: detail.companyLogoUrl }),
-            ...(detail.companyPhotos.length > 0 && { companyPhotos: detail.companyPhotos }),
+            ...(detail.companyLogoUrl && {
+              companyLogoUrl: detail.companyLogoUrl,
+            }),
+            ...(detail.companyPhotos.length > 0 && {
+              companyPhotos: detail.companyPhotos,
+            }),
             ...(detail.representativeGames.length > 0 && {
               representativeGames: detail.representativeGames,
             }),
-            ...(detail.bodyImages.length > 0 && { bodyImages: detail.bodyImages }),
+            ...(detail.bodyImages.length > 0 && {
+              bodyImages: detail.bodyImages,
+            }),
           },
         });
         updated++;
       } catch (err) {
         failed++;
-        this.logger.warn(`rescrape ${job.id} 실패: ${String(err).slice(0, 140)}`);
+        this.logger.warn(
+          `rescrape ${job.id} 실패: ${String(err).slice(0, 140)}`,
+        );
       }
       if (i + 1 < targets.length && sleepMs > 0) {
         await new Promise((r) => setTimeout(r, sleepMs));
@@ -472,7 +498,13 @@ export function computeExpired(
 }
 
 function asExperience(v: string | null | undefined): ExperienceLevel | null {
-  if (v === 'newcomer' || v === 'junior' || v === 'mid' || v === 'senior' || v === 'any') {
+  if (
+    v === 'newcomer' ||
+    v === 'junior' ||
+    v === 'mid' ||
+    v === 'senior' ||
+    v === 'any'
+  ) {
     return v;
   }
   return null;
@@ -515,6 +547,8 @@ export function toJobDto(
     employmentType?: string | null;
     locations?: string[];
     isRemote?: boolean;
+    jobFamilies?: string[];
+    artSubtypes?: string[];
   },
   alternateSources: Job['alternateSources'] = [],
 ): Job {
@@ -544,5 +578,7 @@ export function toJobDto(
     employmentType: asEmployment(row.employmentType ?? null),
     locations: row.locations ?? [],
     isRemote: row.isRemote ?? false,
+    jobFamilies: row.jobFamilies ?? [],
+    artSubtypes: row.artSubtypes ?? [],
   };
 }
