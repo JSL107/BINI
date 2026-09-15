@@ -6,11 +6,12 @@
  * Architecture: `apps/api`가 아니라 여기 (`apps/crawler`)에 있어야 Vercel 번들에
  * Playwright가 포함되지 않는다.
  *
- * Politeness: 4-8s 지터링 sleep. 순차 처리.
+ * Politeness: 4-8s 지터링 sleep. 순차 처리. NAMUWIKI_TIME_BUDGET_MS가 지나면 스스로 멈춰
+ * 워크플로 뒤 단계가 실행되게 한다 — 남은 대상은 다음 실행에서 처리.
  *
  * 갱신 정책 (gatherTargets 안에서):
  *   - 한 번도 시도 안 한 게임명 → 시도
- *   - 직전 결과가 'blocked' → 재시도 (차단은 일시적 가능성)
+ *   - 직전 결과가 'blocked' → 3일 지났으면 재시도 (차단은 일시적 가능성, 매 실행 두드리진 않음)
  *   - 직전 결과가 'not_found' → 7일 지났으면 재시도 (페이지가 새로 생겼을 수도)
  *   - 직전 결과가 'found' → 30일 지났으면 재시도 (이미지 변경 가능)
  *
@@ -22,14 +23,13 @@
 
 import { chromium, type Browser } from 'playwright';
 import { Client } from 'pg';
+import { shouldCrawlNamuwiki } from './crawl-policy.js';
 import { fetchNamuwikiImage } from './namuwiki.js';
 
 const MAX_TARGETS = Number(process.env.NAMUWIKI_MAX_TARGETS ?? '300');
 const SLEEP_MIN_MS = Number(process.env.NAMUWIKI_SLEEP_MIN_MS ?? '4000');
 const SLEEP_MAX_MS = Number(process.env.NAMUWIKI_SLEEP_MAX_MS ?? '8000');
-
-const FOUND_TTL_DAYS = 30;
-const NOT_FOUND_TTL_DAYS = 7;
+const TIME_BUDGET_MS = Number(process.env.NAMUWIKI_TIME_BUDGET_MS ?? String(10 * 60_000));
 
 async function gatherTargets(db: Client): Promise<string[]> {
   const games = await db.query<{ name: string }>(`
@@ -47,17 +47,7 @@ async function gatherTargets(db: Client): Promise<string[]> {
   );
   const seenBy = new Map(seen.rows.map((r) => [r.gameName, r]));
   const now = Date.now();
-  const dayMs = 86_400_000;
-
-  return Array.from(names).filter((name) => {
-    const row = seenBy.get(name);
-    if (!row) return true;
-    const ageDays = (now - new Date(row.fetchedAt).getTime()) / dayMs;
-    if (row.status === 'blocked') return true;
-    if (row.status === 'not_found') return ageDays > NOT_FOUND_TTL_DAYS;
-    if (row.status === 'found') return ageDays > FOUND_TTL_DAYS;
-    return false;
-  });
+  return Array.from(names).filter((name) => shouldCrawlNamuwiki(seenBy.get(name), now));
 }
 
 async function upsert(
@@ -116,7 +106,14 @@ async function main() {
     let notFoundCount = 0;
     let blockedCount = 0;
 
+    const startedAt = Date.now();
     for (let i = 0; i < targets.length; i++) {
+      if (Date.now() - startedAt > TIME_BUDGET_MS) {
+        console.log(
+          `[budget] time budget exhausted after ${i}/${targets.length} — rest deferred to next run`,
+        );
+        break;
+      }
       const name = targets[i];
       try {
         const r = await fetchNamuwikiImage(context, name);

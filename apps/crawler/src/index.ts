@@ -13,6 +13,10 @@
  *
  * Politeness: 5-10s sleep between queries (jittered). Sequential.
  *
+ * Retry policy lives in `crawl-policy.ts` (cooldown per last attempt). A run stops
+ * itself after CRAWLER_TIME_BUDGET_MS so the later workflow steps still run; the
+ * remaining queries are picked up next run (never-tried first).
+ *
  * Run locally:
  *   DATABASE_URL=postgresql://… pnpm --filter crawler crawl
  *
@@ -21,11 +25,13 @@
 
 import { chromium, type Browser, type BrowserContext } from 'playwright';
 import { Client } from 'pg';
+import { planImageQueries, type ImageCacheRow, type ImageTarget } from './crawl-policy.js';
 
 const MAX_QUERIES = Number(process.env.CRAWLER_MAX_QUERIES ?? '500');
 const SLEEP_MIN_MS = Number(process.env.CRAWLER_SLEEP_MIN_MS ?? '5000');
 const SLEEP_MAX_MS = Number(process.env.CRAWLER_SLEEP_MAX_MS ?? '10000');
 const PAGE_TIMEOUT_MS = Number(process.env.CRAWLER_PAGE_TIMEOUT_MS ?? '15000');
+const TIME_BUDGET_MS = Number(process.env.CRAWLER_TIME_BUDGET_MS ?? String(15 * 60_000));
 
 interface GoogleResult {
   imageUrl: string | null;
@@ -39,7 +45,7 @@ async function loadBadImageUrls(db: Client): Promise<Set<string>> {
   return new Set(rows.rows.map((r) => r.imageUrl));
 }
 
-async function gatherQueries(db: Client): Promise<string[]> {
+async function gatherQueries(db: Client): Promise<ImageTarget[]> {
   const a = await db.query<{ q: string }>(`
     SELECT DISTINCT "imageQuery" AS q
     FROM jobs
@@ -55,25 +61,12 @@ async function gatherQueries(db: Client): Promise<string[]> {
   if (all.size === 0) return [];
 
   const placeholders = Array.from(all).map((_, i) => `$${i + 1}`).join(',');
-  const seen = await db.query<{ query: string; source: string; status: string }>(
-    `SELECT query, source, status FROM game_images WHERE query IN (${placeholders})`,
+  const seen = await db.query<ImageCacheRow & { query: string }>(
+    `SELECT query, source, status, "fetchedAt", "imageUrl" FROM game_images WHERE query IN (${placeholders})`,
     Array.from(all),
   );
   const seenByQuery = new Map(seen.rows.map((r) => [r.query, r]));
-
-  return Array.from(all).filter((q) => {
-    const row = seenByQuery.get(q);
-    if (!row) return true; // never tried
-    // Already crawler-found by Google → done.
-    if (row.source === 'google-crawler' && row.status === 'found') return false;
-    // Crawler hit Google block last time → retry (per spec).
-    if (row.source === 'google-crawler' && row.status === 'blocked') return true;
-    // Naver not_found → upgrade attempt.
-    if (row.source === 'naver' && row.status === 'not_found') return true;
-    // Naver found and crawler hasn't tried → upgrade attempt.
-    if (row.source === 'naver' && row.status === 'found') return true;
-    return false;
-  });
+  return planImageQueries(Array.from(all), seenByQuery, Date.now());
 }
 
 async function searchGoogle(
@@ -144,7 +137,9 @@ async function searchNaver(
     },
   ).catch(() => null);
   if (!res || !res.ok) return null;
-  const html = await res.text();
+  // 본문 읽기에도 timeout이 걸린다 — 여기서 throw하면 호출부가 시도 기록(recordMiss)을 건너뛴다.
+  const html = await res.text().catch(() => null);
+  if (html === null) return null;
   // 후보 패턴들을 모두 모아 차단 URL은 skip하고 첫 합격품을 채택.
   // 네이버는 결과 wrapper가 들쭉날쭉해 4가지 패턴 다 시도한다 (모두 같은 결과 페이지 안).
   const patterns = [
@@ -184,6 +179,24 @@ async function upsert(
   `,
     [query, imageUrl, status, source],
   );
+}
+
+/**
+ * 이미지를 못 얻은 시도를 기록한다. 이미 이미지가 있는 행(네이버 결과의 구글 업그레이드 시도)은
+ * 결과를 그대로 두고 재시도 시계(fetchedAt)만 갱신 — 실패한 업그레이드가 기존 이미지를 null로 덮지 않게.
+ */
+async function recordMiss(
+  db: Client,
+  target: ImageTarget,
+  status: 'blocked' | 'not_found',
+): Promise<void> {
+  if (target.hasImage) {
+    await db.query(`UPDATE game_images SET "fetchedAt" = now() WHERE query = $1`, [
+      target.query,
+    ]);
+  } else {
+    await upsert(db, target.query, 'google-crawler', null, status);
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -228,28 +241,33 @@ async function main() {
     let naverFoundCount = 0;
     let emptyCount = 0;
 
+    const startedAt = Date.now();
     for (let i = 0; i < queries.length; i++) {
-      const q = queries[i];
+      if (Date.now() - startedAt > TIME_BUDGET_MS) {
+        console.log(
+          `[budget] time budget exhausted after ${i}/${queries.length} — rest deferred to next run`,
+        );
+        break;
+      }
+      const target = queries[i];
+      const q = target.query;
       try {
         const g = await searchGoogle(context, q, blockedUrls);
-        if (g.blocked) {
-          // Mark blocked; then try Naver.
-          await upsert(db, q, 'google-crawler', null, 'blocked');
-          blockedCount++;
-          const n = await searchNaver(q, blockedUrls);
+        if (g.imageUrl) {
+          await upsert(db, q, 'google-crawler', g.imageUrl, 'found');
+          okCount++;
+        } else {
+          if (g.blocked) blockedCount++;
+          // Naver fallback only when Google blocked us (unchanged).
+          const n = g.blocked ? await searchNaver(q, blockedUrls) : null;
           if (n) {
             await upsert(db, q, 'naver', n, 'found');
             naverFoundCount++;
           } else {
-            // Leave the blocked row as the latest record so the next crawl retries.
+            // blocked → retried after cooldown; not_found → final (see crawl-policy.ts).
+            await recordMiss(db, target, g.blocked ? 'blocked' : 'not_found');
             emptyCount++;
           }
-        } else if (g.imageUrl) {
-          await upsert(db, q, 'google-crawler', g.imageUrl, 'found');
-          okCount++;
-        } else {
-          await upsert(db, q, 'google-crawler', null, 'not_found');
-          emptyCount++;
         }
       } catch (e) {
         console.error(`[err] ${q}: ${String(e).slice(0, 140)}`);

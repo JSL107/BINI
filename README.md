@@ -25,7 +25,7 @@
                                     │
                                     └─▶ /api/companies/career-sites   ─▶ GitHub raw README (24h 캐시)
 
-GitHub Actions (3시간마다)  ─▶  apps/api/src/scripts/cron-jobs.ts
+GitHub Actions (하루 2회)   ─▶  apps/api/src/scripts/cron-jobs.ts
                                     │
                                     ├─▶ JobsCronService.scrapeAndUpsert()
                                     │     │
@@ -42,7 +42,7 @@ GitHub Actions (3시간마다)  ─▶  apps/api/src/scripts/cron-jobs.ts
                                     │
                                     └─▶ sweepExpired()  ── 7일 lastSeenAt 넘은 잡 expiredAt 마킹
 
-GitHub Actions (6시간마다)  ─▶  apps/crawler  ── Playwright Chromium
+GitHub Actions (하루 1회)   ─▶  apps/crawler  ── Playwright Chromium
                                     │
                                     └─▶ Google 이미지 검색 ─▶ game_images 테이블 적재
                                         (API 런타임은 Playwright 절대 임포트하지 않음)
@@ -77,8 +77,8 @@ BINI/
 │        └─ JobImageCarousel.tsx    # 게임/회사 이미지 캐러셀
 ├─ packages/types/            # 두 앱이 공유하는 Job/Source/Response 타입
 ├─ .github/workflows/
-│  ├─ refresh-jobs.yml        # 3시간 cron: 스크래핑 + dedup + upsert + expire sweep
-│  └─ refresh-images.yml      # 6시간 cron: Google 이미지 크롤
+│  ├─ refresh-jobs.yml        # 하루 2회 cron: 스크래핑 + dedup + upsert + expire sweep
+│  └─ refresh-images.yml      # 하루 1회 cron: Google 이미지 크롤
 └─ docs/superpowers/
    ├─ plans/                  # 단계별 구현 계획
    ├─ specs/                  # 디자인 문서
