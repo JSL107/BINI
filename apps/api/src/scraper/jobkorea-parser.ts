@@ -23,7 +23,9 @@ export function parseJobkoreaList(html: string): RawJob[] {
     const card = $(el);
 
     // 첫 a (CompanyLogo)의 href에서 sourceId 추출
-    const logoAnchor = card.find('a[data-sentry-component="CompanyLogo"]').first();
+    const logoAnchor = card
+      .find('a[data-sentry-component="CompanyLogo"]')
+      .first();
     const detailHref = logoAnchor.attr('href') ?? '';
     const idMatch = detailHref.match(/GI_Read\/(\d+)/);
     if (!idMatch) return;
@@ -71,6 +73,8 @@ export function parseJobkoreaList(html: string): RawJob[] {
       // 등록일 텍스트도 없음 — 빈 문자열로 두면 parseRelativeTime이 now 반환
       registeredAtText: '',
       tags,
+      // 이 소스는 목록에 직군 라벨을 주지 않는다. 게임잡만 채운다.
+      jobFamilies: [],
     });
   });
 

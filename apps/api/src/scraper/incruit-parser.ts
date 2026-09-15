@@ -20,7 +20,9 @@ export function parseIncruitList(html: string): RawJob[] {
     const companyUrl = companyAnchor.attr('href') ?? '';
     if (!company) return;
 
-    const titleAnchor = row.find('.cell_mid .cl_top a[href*="jobdb_info"]').first();
+    const titleAnchor = row
+      .find('.cell_mid .cl_top a[href*="jobdb_info"]')
+      .first();
     const title = titleAnchor.text().trim();
     const detailUrl = titleAnchor.attr('href') ?? '';
     if (!title || !detailUrl) return;
@@ -33,7 +35,11 @@ export function parseIncruitList(html: string): RawJob[] {
 
     const deadlineSpan = row.find('.cell_last .cl_btm span').first();
     const deadline = deadlineSpan.text().trim() || '상시';
-    const registeredAtText = row.find('.cell_last .cl_btm span').eq(1).text().trim();
+    const registeredAtText = row
+      .find('.cell_last .cl_btm span')
+      .eq(1)
+      .text()
+      .trim();
 
     jobs.push({
       source: 'incruit',
@@ -45,6 +51,8 @@ export function parseIncruitList(html: string): RawJob[] {
       deadline,
       registeredAtText,
       tags,
+      // 이 소스는 목록에 직군 라벨을 주지 않는다. 게임잡만 채운다.
+      jobFamilies: [],
     });
   });
 

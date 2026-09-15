@@ -57,6 +57,8 @@ export function parseWantedList(json: string): RawJob[] {
         // relative-time 파서가 now를 반환(주기적 재스크래핑 시 lastSeenAt이 보조 정렬키 역할).
         registeredAtText: '',
         tags,
+        // 이 소스는 목록에 직군 라벨을 주지 않는다. 게임잡만 채운다.
+        jobFamilies: [],
       };
     });
 }
