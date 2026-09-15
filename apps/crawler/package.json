@@ -11,6 +11,7 @@
     "crawl:saramin": "node --import tsx/esm src/saramin-details.ts",
     "crawl:jobplanet": "node --import tsx/esm src/jobplanet-main.ts",
     "expire": "node --import tsx/esm src/expire.ts",
+    "test": "node --import tsx/esm --test src/crawl-policy.test.ts",
     "install:chromium": "playwright install --with-deps chromium"
   },
   "dependencies": {

@@ -1,13 +1,14 @@
 name: refresh-jobs
 
-# 3시간마다 잡 스크래퍼(NestJS) cron 진입점을 실행해 DB에 적재한다.
+# 하루 2회 잡 스크래퍼(NestJS) cron 진입점을 실행해 DB에 적재한다.
+# 채용공고는 시간 단위로 바뀌지 않는다 — 3시간 주기는 DB(서버리스 compute)를 불필요하게 깨웠다.
 # 사용자 응답 경로(Vercel api)는 DB만 조회하므로 함수 timeout 위험이 없다.
 # 이미지 검색은 별도 워크플로(`refresh-images.yml`)가 담당한다.
 
 on:
   schedule:
-    # UTC '0 */3 * * *' = 3시간마다 정각. GitHub Actions cron은 5~15분 지연 가능(러너 부하).
-    - cron: '0 */3 * * *'
+    # UTC '0 0,9 * * *' = 매일 09:00·18:00 KST. GitHub Actions cron은 5~15분 지연 가능(러너 부하).
+    - cron: '0 0,9 * * *'
   workflow_dispatch: {}
 
 jobs:
