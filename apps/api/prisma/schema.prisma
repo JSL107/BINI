@@ -72,7 +72,7 @@ model Job {
   @@index([experienceLevel])
   @@index([employmentType])
   @@index([isRemote])
-  @@index([jobFamilies])
+  @@index([jobFamilies], type: Gin)
   @@map("jobs")
 }
 
